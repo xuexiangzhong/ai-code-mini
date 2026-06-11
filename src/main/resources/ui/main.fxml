@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            styleClass="root"
+            fx:controller="com.aicode.app.ui.MainWindowController">
+    <top>
+        <HBox spacing="12" alignment="CENTER_LEFT" styleClass="toolbar">
+            <padding><Insets top="8" right="16" bottom="8" left="16"/></padding>
+            <Label fx:id="statusLabel" text="AiCode" styleClass="agent-title"/>
+            <Label text="工作区" styleClass="meta-label"/>
+            <TextField fx:id="workspaceField" editable="false" styleClass="workspace-field"
+                       prefWidth="180" maxWidth="260"/>
+            <Button fx:id="selectWorkspaceButton" text="切换" styleClass="ghost-button"/>
+            <Label text="模型" styleClass="meta-label"/>
+            <ComboBox fx:id="modelBox" prefWidth="180" maxWidth="260"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Button fx:id="saveButton" text="保存" styleClass="ghost-button"/>
+            <Button fx:id="hubButton" text="模型配置" styleClass="ghost-button"/>
+        </HBox>
+    </top>
+    <center>
+        <SplitPane fx:id="editorSplit" styleClass="split-pane" orientation="HORIZONTAL" dividerPositions="0.18, 0.72">
+            <VBox spacing="6" minWidth="120" prefWidth="220" styleClass="sidebar">
+                <padding><Insets top="10" right="8" bottom="8" left="10"/></padding>
+                <HBox alignment="CENTER_LEFT" spacing="4">
+                    <Label text="EXPLORER" styleClass="section-title" HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="refreshFileTreeButton" text="↻" styleClass="ghost-button"/>
+                </HBox>
+                <TreeView fx:id="fileTree" VBox.vgrow="ALWAYS"/>
+            </VBox>
+            <SplitPane orientation="VERTICAL" dividerPositions="0.72" minWidth="200">
+                <VBox fx:id="editorHost" spacing="0"/>
+                <VBox fx:id="terminalHost" spacing="0" prefHeight="180" minHeight="100"/>
+            </SplitPane>
+            <VBox spacing="0" minWidth="280" prefWidth="380" styleClass="chat-panel">
+                <padding><Insets top="0" right="0" bottom="0" left="0"/></padding>
+                <HBox styleClass="panel-header" alignment="CENTER_LEFT" spacing="8">
+                    <padding><Insets top="8" right="12" bottom="4" left="12"/></padding>
+                    <Label text="CHAT" styleClass="section-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="newConversationButton" text="新对话" styleClass="ghost-button"/>
+                </HBox>
+                <ListView fx:id="conversationList" prefHeight="72" maxHeight="88" styleClass="conversation-list"/>
+                <VBox fx:id="chatMessagesHost" styleClass="chat-messages-wrap" VBox.vgrow="ALWAYS">
+                    <padding><Insets top="4" right="12" bottom="4" left="12"/></padding>
+                </VBox>
+                <VBox styleClass="composer">
+                    <VBox styleClass="composer-box">
+                        <HBox styleClass="composer-toolbar" alignment="CENTER_LEFT">
+                            <Label text="模式" styleClass="meta-label"/>
+                            <ComboBox fx:id="chatModeBox" prefWidth="130" styleClass="mode-combo"/>
+                        </HBox>
+                        <HBox styleClass="composer-input-row" alignment="BOTTOM_CENTER">
+                        <VBox fx:id="chatInputHost" spacing="0"/>
+                        <Button fx:id="sendButton" text="↑" styleClass="send-button"/>
+                        </HBox>
+                    </VBox>
+                </VBox>
+            </VBox>
+        </SplitPane>
+    </center>
+</BorderPane>

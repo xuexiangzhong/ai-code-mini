@@ -1,0 +1,385 @@
+package com.aicode.app.ui;
+
+import com.aicode.app.application.AgentApplication;
+import com.aicode.app.config.AppConfig;
+import com.aicode.app.config.ModelProfile;
+import com.aicode.app.event.AgentEvent;
+import com.aicode.app.session.AgentSession;
+import com.aicode.app.session.AgentSessionService;
+import com.aicode.app.session.ChatMode;
+import com.aicode.app.ui.dialog.ApprovalDialog;
+import javafx.application.Platform;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.stage.Stage;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+/** Shared agent/chat session wiring for project and agents windows. */
+public final class AgentSessionBinder {
+    private final Supplier<Stage> stageSupplier;
+    private final ChatTranscriptView chatView;
+    private final ChatComposerInput chatInput;
+    private final Button sendButton;
+    private final ComboBox<ChatMode> chatModeBox;
+    private final Label statusLabel;
+    private Path workspaceRoot;
+    private final Runnable onMissingModel;
+    private final Supplier<String> idleStatusText;
+    private final boolean statusShowsConversationTitle;
+
+    private AgentApplication application;
+    private AgentSessionService sessionService;
+    private final List<ConversationContext> conversations = new ArrayList<>();
+    private ConversationContext active;
+    private ListView<ConversationContext> conversationList;
+    private StreamingChatAppender streamingChat;
+    private ModelProfile activeModel;
+    private Consumer<String> toolLogConsumer;
+
+    public AgentSessionBinder(
+            Path workspaceRoot,
+            Supplier<Stage> stageSupplier,
+            ChatTranscriptView chatView,
+            ChatComposerInput chatInput,
+            Button sendButton,
+            ComboBox<ChatMode> chatModeBox,
+            Label statusLabel,
+            Runnable onMissingModel
+    ) {
+        this(workspaceRoot, stageSupplier, chatView, chatInput, sendButton,
+                chatModeBox, statusLabel, onMissingModel, null, false);
+    }
+
+    public AgentSessionBinder(
+            Path workspaceRoot,
+            Supplier<Stage> stageSupplier,
+            ChatTranscriptView chatView,
+            ChatComposerInput chatInput,
+            Button sendButton,
+            ComboBox<ChatMode> chatModeBox,
+            Label statusLabel,
+            Runnable onMissingModel,
+            Supplier<String> idleStatusText
+    ) {
+        this(workspaceRoot, stageSupplier, chatView, chatInput, sendButton,
+                chatModeBox, statusLabel, onMissingModel, idleStatusText, false);
+    }
+
+    public AgentSessionBinder(
+            Path workspaceRoot,
+            Supplier<Stage> stageSupplier,
+            ChatTranscriptView chatView,
+            ChatComposerInput chatInput,
+            Button sendButton,
+            ComboBox<ChatMode> chatModeBox,
+            Label statusLabel,
+            Runnable onMissingModel,
+            Supplier<String> idleStatusText,
+            boolean statusShowsConversationTitle
+    ) {
+        this.workspaceRoot = workspaceRoot;
+        this.stageSupplier = stageSupplier;
+        this.chatView = chatView;
+        this.chatInput = chatInput;
+        this.sendButton = sendButton;
+        this.chatModeBox = chatModeBox;
+        this.statusLabel = statusLabel;
+        this.onMissingModel = onMissingModel;
+        this.idleStatusText = idleStatusText != null
+                ? idleStatusText
+                : () -> "Workspace: " + workspaceRoot;
+        this.statusShowsConversationTitle = statusShowsConversationTitle;
+        this.streamingChat = new StreamingChatAppender(chatView);
+    }
+
+    public void setToolLogConsumer(Consumer<String> toolLogConsumer) {
+        this.toolLogConsumer = toolLogConsumer;
+    }
+
+    public void bindConversations(ListView<ConversationContext> listView, Button newButton) {
+        this.conversationList = listView;
+        listView.setCellFactory(lv -> new ListCell<>() {
+            @Override
+            protected void updateItem(ConversationContext item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.title());
+            }
+        });
+        listView.getItems().setAll(conversations);
+        listView.getSelectionModel().selectedItemProperty().addListener((obs, old, selected) -> {
+            if (selected == null || selected == active) {
+                return;
+            }
+            switchConversation(selected);
+        });
+        newButton.setOnAction(e -> createNewConversation());
+    }
+
+    public void initializeModes() {
+        chatModeBox.getItems().addAll(ChatMode.AGENT, ChatMode.CHAT);
+        chatModeBox.setValue(ChatMode.AGENT);
+        chatModeBox.valueProperty().addListener((obs, old, mode) -> updateModeHint(mode));
+        updateModeHint(ChatMode.AGENT);
+        sendButton.setOnAction(e -> handleSendOrStop());
+        chatInput.setOnSubmit(() -> {
+            if (active == null || !active.generating()) {
+                sendMessage();
+            }
+        });
+    }
+
+    private void handleSendOrStop() {
+        if (active != null && active.generating()) {
+            stopGenerating();
+        } else {
+            sendMessage();
+        }
+    }
+
+    private void stopGenerating() {
+        if (sessionService == null || active == null) {
+            return;
+        }
+        sessionService.cancelSession(active.sessionId());
+    }
+
+    private void setGeneratingUi(boolean generating) {
+        sendButton.setText(generating ? "■" : "↑");
+        sendButton.setDisable(false);
+    }
+
+    public void updateWorkspace(Path workspace) {
+        this.workspaceRoot = workspace;
+        refreshAgentState();
+    }
+
+    public void applyModel(ModelProfile model) {
+        this.activeModel = model;
+        refreshAgentState();
+    }
+
+    public void appendSystemLine(String text) {
+        if (active == null) {
+            return;
+        }
+        appendStandaloneNotice(active, text);
+    }
+
+    public void refreshAgentState() {
+        conversations.clear();
+        active = null;
+        if (conversationList != null) {
+            conversationList.getItems().clear();
+        }
+        chatView.clear();
+
+        if (activeModel != null && activeModel.isUsable()) {
+            try {
+                AppConfig config = activeModel.toAppConfig(workspaceRoot);
+                application = new AgentApplication(config);
+                sessionService = new AgentSessionService(application, false);
+                createNewConversation();
+                updateInputState();
+            } catch (RuntimeException e) {
+                sendButton.setDisable(true);
+                chatInput.disableInput(true);
+                chatView.showPlainError("Agent 初始化失败: " + e.getMessage());
+            }
+        } else {
+            application = null;
+            sessionService = null;
+            sendButton.setDisable(true);
+            chatInput.disableInput(true);
+        }
+    }
+
+    public void createNewConversation() {
+        if (sessionService == null) {
+            return;
+        }
+        String title = "新对话 " + (conversations.size() + 1);
+        AgentSession session = sessionService.createSession(workspaceRoot);
+        ConversationContext context = buildConversation(session.sessionId(), title);
+        conversations.add(context);
+        if (conversationList != null) {
+            conversationList.getItems().setAll(conversations);
+        }
+        switchConversation(context);
+    }
+
+    private ConversationContext buildConversation(String sessionId, String title) {
+        ConversationContext context = new ConversationContext(sessionId, title);
+        context.setBridge(new UiAgentBridge(
+                text -> appendStreamToConversation(context, text),
+                text -> {
+                    appendActivity(context, text);
+                    if (toolLogConsumer != null) {
+                        toolLogConsumer.accept(text);
+                    }
+                },
+                (event, onComplete) -> showApproval(context, event, onComplete)
+        ));
+        return context;
+    }
+
+    private void switchConversation(ConversationContext context) {
+        streamingChat.resetPending();
+        active = context;
+        chatView.loadTurns(context.transcript().turns());
+        if (statusShowsConversationTitle) {
+            statusLabel.setText(context.generating() ? "生成中..." : context.title());
+        }
+        if (conversationList != null) {
+            conversationList.getSelectionModel().select(context);
+        }
+        updateInputState();
+    }
+
+    private void sendMessage() {
+        if (activeModel == null || !activeModel.isUsable() || sessionService == null || active == null) {
+            onMissingModel.run();
+            return;
+        }
+        if (active.generating()) {
+            return;
+        }
+        String text = chatInput.getText().strip();
+        if (text.isEmpty()) {
+            return;
+        }
+        String contextPrefix = chatInput.attachments().buildPromptPrefix();
+        String payload = contextPrefix.isEmpty() ? text : contextPrefix + text;
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        ConversationContext sending = active;
+        chatInput.clearAfterSend();
+        maybeUpdateTitle(sending, text);
+        appendUser(sending, text);
+        streamingChat.beginStream();
+        sending.setGenerating(true);
+        setGeneratingUi(true);
+        statusLabel.setText("生成中...");
+
+        if (mode == ChatMode.CHAT) {
+            sessionService.sendChatMessage(sending.sessionId(), payload, sending.bridge())
+                    .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
+        } else {
+            sessionService.sendAgentMessage(sending.sessionId(), payload, sending.bridge())
+                    .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
+        }
+    }
+
+    private void finishSend(ConversationContext context, Throwable error) {
+        Runnable done = () -> {
+            context.setGenerating(false);
+            if (context == active) {
+                updateInputState();
+                if (statusShowsConversationTitle) {
+                    statusLabel.setText(context.title());
+                } else {
+                    statusLabel.setText(idleStatusText.get());
+                }
+            }
+            if (conversationList != null) {
+                conversationList.refresh();
+            }
+            if (error != null) {
+                appendActivity(context, "Error: " + error.getMessage());
+            }
+        };
+        if (context == active) {
+            streamingChat.finishStream(done);
+        } else {
+            done.run();
+        }
+    }
+
+    private void maybeUpdateTitle(ConversationContext context, String userMessage) {
+        if (!context.title().startsWith("新对话")) {
+            return;
+        }
+        String shortTitle = userMessage.length() > 28
+                ? userMessage.substring(0, 28) + "…"
+                : userMessage;
+        context.setTitle(shortTitle);
+        if (conversationList != null) {
+            conversationList.refresh();
+        }
+        if (context == active && statusShowsConversationTitle) {
+            statusLabel.setText(shortTitle);
+        }
+    }
+
+    private void updateInputState() {
+        boolean ready = activeModel != null && activeModel.isUsable()
+                && sessionService != null && active != null;
+        if (active != null && active.generating()) {
+            chatInput.disableInput(!ready);
+            setGeneratingUi(true);
+            return;
+        }
+        chatInput.disableInput(!ready);
+        sendButton.setText("↑");
+        sendButton.setDisable(!ready);
+    }
+
+    private void updateModeHint(ChatMode mode) {
+        if (mode == null) {
+            return;
+        }
+        chatInput.setPromptText(mode == ChatMode.CHAT
+                ? "发送后续消息（问答模式）..."
+                : "发送后续消息...");
+    }
+
+    private void appendUser(ConversationContext context, String text) {
+        context.transcript().startTurn(text);
+        if (context == active) {
+            Platform.runLater(() -> chatView.startTurn(text));
+        }
+    }
+
+    private void appendActivity(ConversationContext context, String text) {
+        context.transcript().addActivity(text);
+        if (context == active) {
+            var activities = context.transcript().openTurn().activities();
+            Platform.runLater(() -> chatView.updateCurrentTurnActivity(new java.util.ArrayList<>(activities)));
+        }
+    }
+
+    private void appendStandaloneNotice(ConversationContext context, String text) {
+        context.transcript().addStandaloneNotice(text);
+        if (context == active) {
+            Platform.runLater(() -> chatView.appendStandaloneNotice(text));
+        }
+    }
+
+    private void appendStreamToConversation(ConversationContext context, String text) {
+        context.transcript().appendAssistant(text);
+        if (context == active) {
+            streamingChat.append(text);
+        }
+    }
+
+    private void showApproval(
+            ConversationContext context,
+            AgentEvent.ApprovalRequired event,
+            Runnable onComplete
+    ) {
+        Platform.runLater(() -> {
+            Stage stage = stageSupplier.get();
+            ApprovalDialog dialog = new ApprovalDialog(stage, event, approved -> {
+                sessionService.resolveApproval(context.sessionId(), event.approvalId(), approved);
+                onComplete.run();
+            });
+            dialog.show();
+        });
+    }
+}

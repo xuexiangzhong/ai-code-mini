@@ -1,0 +1,683 @@
+/* Agent 窗口专用浅色主题（参考 Cursor Agent 界面） */
+
+.agent-shell {
+    -fx-background-color: #f7f7f4;
+    -fx-font-family: "Inter", "SF Pro Text", "Segoe UI", "PingFang SC", sans-serif;
+    -fx-font-size: 13px;
+}
+
+/* ── 侧栏 ── */
+.agent-sidebar {
+    -fx-background-color: #f0f0eb;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 0 1 0 0;
+}
+
+.agent-ws-toolbar {
+    -fx-padding: 0 0 8 0;
+}
+
+.agent-ws-toolbar-title {
+    -fx-text-fill: #1a1a18;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+
+.agent-ws-toolbar-add {
+    -fx-background-color: transparent;
+    -fx-text-fill: #6b6b66;
+    -fx-font-size: 13px;
+    -fx-padding: 4 6;
+    -fx-cursor: hand;
+}
+
+.agent-ws-toolbar-add:hover {
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-ws-scroll {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+}
+
+.agent-ws-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.agent-ws-nav {
+    -fx-background-color: transparent;
+}
+
+.agent-ws-group {
+    -fx-padding: 2 0 6 0;
+}
+
+.agent-ws-header {
+    -fx-padding: 4 2 4 0;
+}
+
+.agent-ws-chevron {
+    -fx-background-color: transparent;
+    -fx-text-fill: #9a9a94;
+    -fx-font-size: 10px;
+    -fx-padding: 0 2 0 0;
+    -fx-min-width: 14;
+    -fx-cursor: hand;
+}
+
+.agent-ws-folder-icon {
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+}
+
+.agent-ws-name {
+    -fx-text-fill: #3a3a36;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+}
+
+.agent-ws-name-active {
+    -fx-text-fill: #1a1a18;
+    -fx-font-weight: bold;
+}
+
+.agent-ws-add-session {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #6b6b66;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+    -fx-min-width: 22;
+    -fx-min-height: 22;
+    -fx-max-width: 22;
+    -fx-max-height: 22;
+    -fx-padding: 0;
+    -fx-font-size: 14px;
+    -fx-cursor: hand;
+}
+
+.agent-ws-add-session:hover {
+    -fx-text-fill: #1a1a18;
+    -fx-border-color: #c8c8c2;
+}
+
+.agent-ws-sessions {
+    -fx-padding: 0 0 0 18;
+}
+
+.agent-ws-session-row {
+    -fx-padding: 4 6 4 8;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+}
+
+.agent-ws-session-row:hover {
+    -fx-background-color: #e8e8e3;
+}
+
+.agent-ws-session-selected {
+    -fx-background-color: #e4e4df;
+}
+
+.agent-ws-session-bullet {
+    -fx-text-fill: #9a9a94;
+    -fx-font-size: 10px;
+    -fx-min-width: 8;
+}
+
+.agent-ws-session-title {
+    -fx-text-fill: #3a3a36;
+    -fx-font-size: 12px;
+}
+
+.agent-ws-session-selected .agent-ws-session-title {
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-ws-see-more {
+    -fx-text-fill: #9a9a94;
+    -fx-font-size: 12px;
+    -fx-padding: 4 8 4 18;
+    -fx-cursor: hand;
+}
+
+.agent-ws-see-more:hover {
+    -fx-text-fill: #6b6b66;
+}
+
+.agent-sidebar-section {
+    -fx-text-fill: #6b6b66;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 4 0;
+}
+
+.agent-sidebar-active {
+    -fx-text-fill: #1a1a18;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-padding: 2 0 4 0;
+}
+
+.agent-sidebar-path {
+    -fx-text-fill: #6b6b66;
+    -fx-font-size: 11px;
+    -fx-padding: 0 0 6 0;
+}
+
+.agent-sidebar-footer {
+    -fx-text-fill: #9a9a94;
+    -fx-font-size: 11px;
+}
+
+.agent-sidebar-gap {
+    -fx-min-height: 0;
+    -fx-pref-height: 8;
+}
+
+.agent-sidebar-icon-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-min-width: 28;
+    -fx-min-height: 28;
+    -fx-max-width: 28;
+    -fx-max-height: 28;
+    -fx-padding: 0;
+    -fx-font-size: 16px;
+    -fx-cursor: hand;
+}
+
+.agent-sidebar-icon-btn:hover {
+    -fx-background-color: #fafaf8;
+}
+
+.agent-workspace-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 2 0 4 0;
+}
+
+.agent-workspace-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #3a3a36;
+    -fx-padding: 7 8;
+    -fx-background-radius: 6;
+    -fx-font-size: 13px;
+}
+
+.agent-workspace-list .list-cell:hover {
+    -fx-background-color: #e8e8e3;
+}
+
+.agent-workspace-list .list-cell:selected {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+    -fx-font-weight: bold;
+}
+
+.agent-conversation-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 4 0 8 0;
+}
+
+.agent-conversation-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #3a3a36;
+    -fx-padding: 6 8;
+    -fx-background-radius: 6;
+}
+
+.agent-conversation-list .list-cell:hover {
+    -fx-background-color: #e8e8e3;
+}
+
+.agent-conversation-list .list-cell:selected {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+    -fx-font-weight: bold;
+}
+
+.agent-sidebar-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 8 12;
+    -fx-alignment: center-left;
+    -fx-cursor: hand;
+}
+
+.agent-sidebar-btn:hover {
+    -fx-background-color: #fafaf8;
+    -fx-border-color: #c8c8c2;
+}
+
+.agent-sidebar-combo {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 4 8;
+}
+
+.agent-sidebar-combo .list-cell {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-sidebar-combo .arrow-button {
+    -fx-background-color: transparent;
+}
+
+/* ── 主区域 ── */
+.agent-main {
+    -fx-background-color: #f7f7f4;
+}
+
+.agent-thread-header {
+    -fx-background-color: #f7f7f4;
+    -fx-border-color: #ebebe6;
+    -fx-border-width: 0 0 1 0;
+}
+
+.agent-thread-title {
+    -fx-text-fill: #1a1a18;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.agent-conversation-pane {
+    -fx-background-color: #f7f7f4;
+}
+
+.agent-chat-log {
+    -fx-background-color: #f7f7f4;
+    -fx-padding: 12 16;
+}
+
+.agent-chat-log .chat-transcript {
+    -fx-background-color: transparent;
+}
+
+.agent-chat-log .chat-bubble-user {
+    -fx-background-color: #dce8ff;
+    -fx-effect: dropshadow(gaussian, rgba(66,133,244,0.12), 8, 0, 0, 2);
+}
+
+.agent-chat-log .chat-bubble-user .chat-bubble-body {
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-chat-log .chat-bubble-assistant {
+    -fx-background-color: #ffffff;
+    -fx-border-color: rgba(52, 168, 83, 0.25);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 8, 0, 0, 2);
+}
+
+.agent-chat-log .chat-bubble-assistant .chat-bubble-body {
+    -fx-text-fill: #2c2c2a;
+}
+
+.agent-chat-log .chat-activity-row {
+    -fx-background-color: #eef2f6;
+    -fx-border-color: #c8d4df;
+}
+
+.agent-chat-log .chat-activity-row:hover {
+    -fx-background-color: #e4ebf3;
+    -fx-border-color: #9bb0c4;
+}
+
+.agent-chat-log .chat-activity-icon {
+    -fx-background-color: #dde7f2;
+    -fx-text-fill: #3c6ea8;
+}
+
+.agent-chat-log .chat-activity-icon:hover {
+    -fx-background-color: #cddaea;
+}
+
+.agent-chat-log .chat-activity-preview {
+    -fx-text-fill: #4a5568;
+}
+
+.agent-chat-log .chat-activity-count {
+    -fx-text-fill: #5f6368;
+    -fx-background-color: #e2e8f0;
+}
+
+.agent-chat-log .activity-log-dialog {
+    -fx-background-color: #ffffff;
+}
+
+.agent-chat-log .activity-log-title {
+    -fx-text-fill: #2c2c2a;
+}
+
+.agent-chat-log .activity-log-body {
+    -fx-control-inner-background: #f7f7f4;
+    -fx-background-color: #f7f7f4;
+    -fx-text-fill: #3c4043;
+    -fx-border-color: #d8d8d2;
+}
+
+/* ── 底部 Composer ── */
+.agent-composer-dock {
+    -fx-background-color: #f7f7f4;
+    -fx-border-color: #ebebe6;
+    -fx-border-width: 1 0 0 0;
+}
+
+.agent-composer-card {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.04), 8, 0, 0, 2);
+}
+
+.agent-composer-input {
+    -fx-control-inner-background: transparent;
+    -fx-background-color: transparent;
+    -fx-text-fill: #1a1a18;
+    -fx-prompt-text-fill: #9a9a94;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 4 0;
+    -fx-font-size: 14px;
+}
+
+.agent-composer-card .at-mention-input {
+    -fx-background-color: #ffffff;
+}
+
+.agent-composer-card .at-mention-textarea {
+    -fx-control-inner-background: #ffffff;
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+    -fx-prompt-text-fill: #9a9a94;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-padding: 4 0;
+}
+
+.agent-composer-card .at-mention-textarea .content {
+    -fx-background-color: #ffffff;
+}
+
+.agent-composer-card .at-mention-popup {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d0d0ca;
+    -fx-padding: 6;
+}
+
+.agent-composer-card .at-mention-popup-list {
+    -fx-background-color: transparent;
+}
+
+.agent-composer-card .at-mention-popup-list .list-cell {
+    -fx-text-fill: #2a2a26;
+    -fx-padding: 0 12;
+    -fx-font-size: 13px;
+    -fx-background-radius: 6;
+    -fx-alignment: center-left;
+}
+
+.agent-composer-card .at-mention-popup-list .list-cell:hover {
+    -fx-background-color: #f0f0ec;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-composer-card .at-mention-popup-list .list-cell:selected {
+    -fx-background-color: #dce8ff;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-send-btn {
+    -fx-background-color: #1a1a18;
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-min-width: 34;
+    -fx-min-height: 34;
+    -fx-max-width: 34;
+    -fx-max-height: 34;
+    -fx-background-radius: 17;
+    -fx-border-radius: 17;
+    -fx-padding: 0;
+    -fx-cursor: hand;
+}
+
+.agent-send-btn:hover {
+    -fx-background-color: #333330;
+}
+
+.agent-send-btn:disabled {
+    -fx-background-color: #d8d8d2;
+    -fx-text-fill: #9a9a94;
+}
+
+/* ComboBox 弹出列表（Agent 窗口内） */
+.agent-shell .combo-box-popup .list-view {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d8d8d2;
+}
+
+.agent-shell .combo-box-popup .list-cell {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-shell .combo-box-popup .list-cell:hover {
+    -fx-background-color: #f0f0eb;
+}
+
+.agent-shell .combo-box-popup .list-cell:selected {
+    -fx-background-color: #e8f0fe;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-shell .scroll-bar .thumb {
+    -fx-background-color: #d0d0ca;
+    -fx-background-radius: 4;
+}
+
+.agent-shell .scroll-bar .thumb:hover {
+    -fx-background-color: #b8b8b2;
+}
+
+.agent-shell .label {
+    -fx-text-fill: #2c2c2a;
+}
+
+/* ── 中间独立文件编辑区 ── */
+.agent-center-split {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.agent-center-split > .split-pane-divider {
+    -fx-background-color: #e4e4df;
+    -fx-padding: 0 2 0 0;
+}
+
+.agent-editor-edge-strip {
+    -fx-background-color: #d0d0ca;
+    -fx-cursor: hand;
+    -fx-border-color: #b8b8b2;
+    -fx-border-width: 0 0 0 1;
+}
+
+.agent-editor-edge-strip:hover {
+    -fx-background-color: #3d5a80;
+}
+
+.agent-editor-dock {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 1 0 0 0;
+}
+
+.agent-editor-dock-header {
+    -fx-background-color: #f0f0eb;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 0 0 1 0;
+    -fx-spacing: 8;
+}
+
+.agent-editor-dock-title {
+    -fx-text-fill: #1a1a18;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.agent-editor-dock .editor-tabs {
+    -fx-background-color: #f0f0eb;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 0 0 1 0;
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+}
+
+.agent-editor-dock .editor-tabs .tab-header-area {
+    -fx-padding: 4 8 0 8;
+}
+
+.agent-editor-dock .editor-tabs .tab-header-background {
+    -fx-background-color: #f0f0eb;
+}
+
+.agent-editor-dock .editor-tabs .headers-region {
+    -fx-background-color: #f0f0eb;
+}
+
+.agent-editor-dock .editor-tabs .tab {
+    -fx-background-color: #e8e8e3;
+    -fx-background-radius: 6 6 0 0;
+    -fx-padding: 6 12;
+}
+
+.agent-editor-dock .editor-tabs .tab:selected {
+    -fx-background-color: #ffffff;
+}
+
+.agent-editor-dock .editor-tabs .tab-label {
+    -fx-text-fill: #3a3a36;
+    -fx-font-size: 12px;
+}
+
+.agent-editor-dock .editor-tabs .tab:selected .tab-label {
+    -fx-text-fill: #1a1a18;
+    -fx-font-weight: bold;
+}
+
+.agent-editor-dock-action {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #3a3a36;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 3 10;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.agent-editor-dock-action:hover {
+    -fx-background-color: #fafaf8;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-editor-dock-close {
+    -fx-background-color: transparent;
+    -fx-text-fill: #6b6b66;
+    -fx-font-size: 12px;
+    -fx-padding: 3 8;
+    -fx-cursor: hand;
+}
+
+.agent-editor-dock-close:hover {
+    -fx-text-fill: #1a1a18;
+}
+
+/* ── 右侧项目文件目录（仅树，不含编辑器）── */
+.agent-file-toggle-btn {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #3a3a36;
+    -fx-border-color: #d8d8d2;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 4 12;
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+}
+
+.agent-file-toggle-btn:hover {
+    -fx-background-color: #fafaf8;
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-file-panel {
+    -fx-background-color: #fafaf8;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 0 0 0 1;
+}
+
+.agent-file-panel-header {
+    -fx-background-color: #f0f0eb;
+    -fx-border-color: #e4e4df;
+    -fx-border-width: 0 0 1 0;
+    -fx-spacing: 6;
+}
+
+.agent-file-panel-title {
+    -fx-text-fill: #1a1a18;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.agent-file-panel-refresh,
+.agent-file-panel-close {
+    -fx-background-color: transparent;
+    -fx-text-fill: #6b6b66;
+    -fx-font-size: 12px;
+    -fx-padding: 3 8;
+    -fx-cursor: hand;
+}
+
+.agent-file-panel-refresh {
+    -fx-font-size: 14px;
+    -fx-padding: 2 6;
+}
+
+.agent-file-panel-refresh:hover,
+.agent-file-panel-close:hover {
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-file-tree {
+    -fx-background-color: #fafaf8;
+    -fx-border-color: transparent;
+    -fx-padding: 4 6;
+}
+
+.agent-file-tree .tree-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #3a3a36;
+    -fx-padding: 3 4;
+}
+
+.agent-file-tree .tree-cell:selected {
+    -fx-background-color: #e8f0fe;
+    -fx-text-fill: #1a1a18;
+}

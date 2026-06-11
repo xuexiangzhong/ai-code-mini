@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            styleClass="hub-root"
+            fx:controller="com.aicode.app.ui.HubController">
+    <top>
+        <VBox spacing="6" styleClass="hub-header">
+            <padding><Insets top="20" right="24" bottom="12" left="24"/></padding>
+            <Label text="AiCode" styleClass="hub-brand"/>
+            <Label text="配置模型，选择打开方式" styleClass="config-hint"/>
+            <Label fx:id="configPathLabel" wrapText="true" styleClass="config-hint"/>
+        </VBox>
+    </top>
+    <center>
+        <VBox styleClass="hub-content" spacing="16">
+            <VBox fx:id="onboardingBox" styleClass="hub-guide-card" spacing="6" visible="false" managed="false">
+                <Label text="首次使用？三步配置大模型" styleClass="guide-title"/>
+                <Label text="1. API URL — 模型服务接口地址（Ollama: http://localhost:11434/v1 · 通义千问: https://dashscope.aliyuncs.com/compatible-mode/v1）"
+                       wrapText="true" styleClass="guide-step"/>
+                <Label text="2. Model — 具体模型名称（如 qwen3:8b、deepseek-chat）"
+                       wrapText="true" styleClass="guide-step"/>
+                <Label text="3. API Key — 身份验证（Ollama 可填任意值如 ollama，云端服务需从平台申请 sk- 开头的 Key）"
+                       wrapText="true" styleClass="guide-step"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Button fx:id="quickAddButton" text="立即添加模型" styleClass="primary-button"/>
+                    <Button fx:id="openGuideButton" text="查看图文教程" styleClass="ghost-button"/>
+                </HBox>
+            </VBox>
+            <VBox styleClass="hub-card" spacing="10">
+                <Label text="MODELS" styleClass="section-title"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Button fx:id="addModelButton" text="+ 添加模型" styleClass="primary-button"/>
+                    <Button fx:id="editModelButton" text="编辑" styleClass="ghost-button"/>
+                    <Button fx:id="deleteModelButton" text="删除" styleClass="ghost-button"/>
+                    <Button fx:id="defaultModelButton" text="设为默认" styleClass="ghost-button"/>
+                </HBox>
+                <ListView fx:id="modelList" prefHeight="220" VBox.vgrow="ALWAYS"/>
+                <Label fx:id="statusLabel" wrapText="true" styleClass="hint-text"/>
+            </VBox>
+        </VBox>
+    </center>
+    <bottom>
+        <VBox spacing="12" styleClass="hub-footer">
+            <padding><Insets top="16" right="24" bottom="20" left="24"/></padding>
+            <Label text="OPEN AS" styleClass="section-title"/>
+            <HBox spacing="12">
+                <Button fx:id="openProjectButton" text="项目窗口" styleClass="action-card-button" prefWidth="180"/>
+                <Button fx:id="openAgentsButton" text="Agent 窗口" styleClass="action-card-button" prefWidth="180"/>
+            </HBox>
+            <Label text="项目窗口：文件树 + 编辑器 + 侧栏 Chat · Agent 窗口：对话为主，右侧显示工具活动"
+                   wrapText="true" styleClass="config-hint"/>
+        </VBox>
+    </bottom>
+</BorderPane>

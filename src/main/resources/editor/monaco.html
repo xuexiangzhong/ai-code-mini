@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Editor</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1e1e1e; }
+    #container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <script src="vs/loader.js"></script>
+  <script>
+    var editor = null;
+    var dirty = false;
+
+    require.config({ paths: { vs: 'vs' } });
+
+    require(['vs/editor/editor.main'], function () {
+      editor = monaco.editor.create(document.getElementById('container'), {
+        value: '',
+        language: 'plaintext',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        fontSize: 13,
+        fontFamily: 'JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        wordWrap: 'on',
+        tabSize: 2,
+        insertSpaces: true
+      });
+      editor.onDidChangeModelContent(function () {
+        dirty = true;
+        if (window.javaBridge && window.javaBridge.onDirty) {
+          window.javaBridge.onDirty();
+        }
+      });
+    });
+
+    function setContent(text, language) {
+      if (!editor) return;
+      editor.setValue(text || '');
+      if (language) {
+        monaco.editor.setModelLanguage(editor.getModel(), language);
+      }
+      dirty = false;
+    }
+
+    function getContent() {
+      return editor ? editor.getValue() : '';
+    }
+
+    function getSelection() {
+      if (!editor) return '';
+      var sel = editor.getSelection();
+      return editor.getModel().getValueInRange(sel) || '';
+    }
+
+    function setLanguage(language) {
+      if (editor && language) {
+        monaco.editor.setModelLanguage(editor.getModel(), language);
+      }
+    }
+
+    function isDirty() {
+      return dirty;
+    }
+
+    function markClean() {
+      dirty = false;
+    }
+  </script>
+</body>
+</html>

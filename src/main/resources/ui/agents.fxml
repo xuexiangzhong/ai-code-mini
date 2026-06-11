@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            styleClass="agent-shell"
+            fx:controller="com.aicode.app.ui.AgentsWindowController">
+    <left>
+        <VBox spacing="0" styleClass="agent-sidebar" prefWidth="196" minWidth="168" maxWidth="220">
+            <padding><Insets top="10" right="8" bottom="10" left="10"/></padding>
+            <HBox alignment="CENTER_LEFT" spacing="6" styleClass="agent-ws-toolbar">
+                <Label text="Workspaces" styleClass="agent-ws-toolbar-title" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="addWorkspaceButton" text="📁+" styleClass="agent-ws-toolbar-add"/>
+            </HBox>
+            <ScrollPane fx:id="sidebarScroll" styleClass="agent-ws-scroll" VBox.vgrow="ALWAYS">
+                <VBox fx:id="sidebarNavBox" spacing="4" styleClass="agent-ws-nav"/>
+            </ScrollPane>
+            <Pane styleClass="agent-sidebar-gap" prefHeight="10"/>
+            <Button fx:id="hubButton" text="模型配置" styleClass="agent-sidebar-btn" maxWidth="Infinity"/>
+            <Pane styleClass="agent-sidebar-gap" prefHeight="8"/>
+            <Label text="模型" styleClass="agent-sidebar-section"/>
+            <ComboBox fx:id="modelBox" styleClass="agent-sidebar-combo" maxWidth="Infinity"/>
+            <Pane styleClass="agent-sidebar-gap" prefHeight="8"/>
+            <Label text="模式" styleClass="agent-sidebar-section"/>
+            <ComboBox fx:id="chatModeBox" styleClass="agent-sidebar-combo" maxWidth="Infinity"/>
+            <Label fx:id="footerLabel" styleClass="agent-sidebar-footer" wrapText="true"/>
+        </VBox>
+    </left>
+    <center>
+        <BorderPane styleClass="agent-main">
+            <top>
+                <HBox alignment="CENTER_LEFT" styleClass="agent-thread-header">
+                    <padding><Insets top="14" right="20" bottom="10" left="20"/></padding>
+                    <Label fx:id="threadTitleLabel" text="新对话" styleClass="agent-thread-title"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Button fx:id="toggleFilePanelButton" text="文件" styleClass="agent-file-toggle-btn"/>
+                </HBox>
+            </top>
+            <center>
+                <SplitPane fx:id="centerSplit" orientation="HORIZONTAL" dividerPositions="1.0"
+                           styleClass="agent-center-split">
+                    <VBox spacing="0" styleClass="agent-conversation-pane" minWidth="0">
+                        <VBox fx:id="chatMessagesHost" styleClass="agent-chat-log" VBox.vgrow="ALWAYS"/>
+                    </VBox>
+                    <StackPane fx:id="editorSlot" minWidth="0" prefWidth="0" maxWidth="Infinity">
+                        <VBox fx:id="editorDock" spacing="0" styleClass="agent-editor-dock"
+                              visible="false" managed="false">
+                            <HBox alignment="CENTER_LEFT" styleClass="agent-editor-dock-header">
+                                <padding><Insets top="8" right="12" bottom="8" left="16"/></padding>
+                                <Label text="文件编辑" styleClass="agent-editor-dock-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="saveFileButton" text="保存" styleClass="agent-editor-dock-action"/>
+                                <Button fx:id="collapseEditorButton" text="收至侧边" styleClass="agent-editor-dock-action"/>
+                                <Button fx:id="closeEditorDockButton" text="关闭" styleClass="agent-editor-dock-close"/>
+                            </HBox>
+                            <VBox fx:id="agentEditorHost" spacing="0" VBox.vgrow="ALWAYS"/>
+                        </VBox>
+                        <Region fx:id="editorEdgeStrip" styleClass="agent-editor-edge-strip"
+                                visible="false" managed="false" maxWidth="12" prefWidth="12" minWidth="12"/>
+                    </StackPane>
+                </SplitPane>
+            </center>
+            <bottom>
+                <VBox spacing="8" styleClass="agent-composer-dock">
+                    <padding><Insets top="8" right="20" bottom="16" left="20"/></padding>
+                    <HBox alignment="CENTER_LEFT" spacing="8" styleClass="agent-composer-card">
+                        <padding><Insets top="10" right="12" bottom="10" left="14"/></padding>
+                        <VBox fx:id="chatInputHost" spacing="0"/>
+                        <Button fx:id="sendButton" text="↑" styleClass="agent-send-btn"/>
+                    </HBox>
+                </VBox>
+            </bottom>
+        </BorderPane>
+    </center>
+    <right>
+        <VBox fx:id="filePanel" spacing="0" styleClass="agent-file-panel" visible="false" managed="false"
+              prefWidth="300" minWidth="240" maxWidth="420">
+            <HBox alignment="CENTER_LEFT" styleClass="agent-file-panel-header">
+                <padding><Insets top="8" right="8" bottom="8" left="12"/></padding>
+                <Label fx:id="filePanelTitle" text="项目文件" styleClass="agent-file-panel-title"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="refreshFileTreeButton" text="↻" styleClass="agent-file-panel-refresh"/>
+                <Button fx:id="closeFilePanelButton" text="收起" styleClass="agent-file-panel-close"/>
+            </HBox>
+            <TreeView fx:id="fileTree" styleClass="agent-file-tree" VBox.vgrow="ALWAYS" minHeight="120"/>
+        </VBox>
+    </right>
+</BorderPane>
