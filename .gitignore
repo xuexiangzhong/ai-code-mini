@@ -87,4 +87,5 @@ aicode.yaml
 dist/
 .tools/
 packaging/icons/*.iconset/
+docs
 
