@@ -2,7 +2,7 @@
 
 基于 Java 21 + JavaFX 的 AI 编程助手桌面应用。支持连接 Ollama、DeepSeek、通义千问等 OpenAI 兼容 API，在本地工作区中通过 Agent 自动读文件、搜索代码、执行命令、修改文件。
 
-![Hub 配置页](docs/images/hub.png)
+![Hub 配置页](images/hub.png)
 
 ## 功能特性
 
@@ -13,7 +13,7 @@
 - **CLI 模式** — 终端 REPL，适合脚本化或无图形界面环境
 - **流式输出** — LLM 回复实时渲染，自动处理 token 上限重试
 
-![项目窗口](docs/images/project-window.png)
+![项目窗口](images/project-window.png)
 
 ## 环境要求
 
@@ -29,16 +29,7 @@
 git clone https://github.com/xuexiangzhong/ai-code-mini.git
 cd ai-code-mini
 
-# 编译
-mvn clean package -DskipTests
-
-# 启动图形界面（默认）
-./start.sh
-
-# 或进入你的项目目录后启动，Agent 将操作该目录
-cd /path/to/your-project
-/path/to/ai-code-mini/start.sh
-```
+# 本机调试运行用常用的java ide即可
 
 首次启动会进入 **Hub 配置页**，按界面提示完成三步配置即可使用。
 
@@ -72,9 +63,6 @@ ai-code-mini/
 ```
 
 ## 打包安装包
-
-生成 macOS `.dmg` 或 Windows `.exe` 安装包，详见 [PACKAGING.md](PACKAGING.md)。
-
 ```bash
 # macOS
 ./package-mac.sh
