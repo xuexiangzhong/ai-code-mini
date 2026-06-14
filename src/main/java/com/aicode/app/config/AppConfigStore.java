@@ -8,7 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Loads and saves {@link AppConfig} to {@code ./aicode.yaml} in the current working directory.
+ * Loads and saves non-sensitive settings to {@code ./aicode.yaml} in the current working directory.
+ * Model/API credentials and token limits live in {@code ~/.aicode/models.json} only.
  */
 public final class AppConfigStore {
     public static final String FILE_NAME = "aicode.yaml";
@@ -25,28 +26,21 @@ public final class AppConfigStore {
     }
 
     public static AppConfig load() {
-        AppConfig config = AppConfig.withDefaults();
-        Path readable = resolveReadableConfigPath();
-        if (Files.isRegularFile(readable)) {
-            try {
-                config = applyFile(config, readable);
-            } catch (IOException e) {
-                System.err.println("Warning: failed to read " + readable + ": " + e.getMessage());
-            }
-        }
-        return AppConfig.applyEnvironment(config);
+        return AppConfigLoader.load();
     }
 
-    private static Path resolveReadableConfigPath() {
-        Path primary = configPath();
-        if (Files.isRegularFile(primary)) {
-            return primary;
+    static AppConfig loadYaml() {
+        AppConfig config = AppConfig.withDefaults();
+        Path readable = resolveReadableConfigPath();
+        if (!Files.isRegularFile(readable)) {
+            return config;
         }
-        Path legacy = WorkingDirectory.effective().resolve(LEGACY_FILE_NAME);
-        if (Files.isRegularFile(legacy)) {
-            return legacy;
+        try {
+            return applyFileValues(config, parseSimpleYaml(readable));
+        } catch (IOException e) {
+            System.err.println("Warning: failed to read " + readable + ": " + e.getMessage());
+            return config;
         }
-        return primary;
     }
 
     public static void save(AppConfig config) throws IOException {
@@ -55,8 +49,44 @@ public final class AppConfigStore {
         Files.writeString(path, toYaml(config), StandardCharsets.UTF_8);
     }
 
-    static AppConfig applyFile(AppConfig base, Path path) throws IOException {
-        Map<String, String> values = parseSimpleYaml(path);
+    static AppConfig applyFileValues(AppConfig base, Map<String, String> values) {
+        return base.withValues(
+                base.apiKey(),
+                base.baseUrl(),
+                base.model(),
+                base.providerType(),
+                values.getOrDefault("agentName", base.agentName()),
+                values.getOrDefault("agentIcon", base.agentIcon()),
+                values.containsKey("workspace") && !values.get("workspace").isBlank()
+                        ? Path.of(values.get("workspace"))
+                        : base.workspace()
+        );
+    }
+
+    /** Legacy yaml may still contain model fields; used only for one-time migration to models.json. */
+    static LegacyYamlLoad loadLegacyYamlForMigration() {
+        AppConfig config = AppConfig.withDefaults();
+        Path readable = resolveReadableConfigPath();
+        if (!Files.isRegularFile(readable)) {
+            return new LegacyYamlLoad(config, false, false, false, false);
+        }
+        try {
+            Map<String, String> values = parseSimpleYaml(readable);
+            config = applyLegacyFileValues(config, values);
+            return new LegacyYamlLoad(
+                    config,
+                    values.containsKey("apiKey") && !values.get("apiKey").isBlank(),
+                    values.containsKey("contextWindow") || values.containsKey("maxTokens"),
+                    values.containsKey("maxOutputTokens") || values.containsKey("maxTokens"),
+                    values.containsKey("maxOutputTokenCap")
+            );
+        } catch (IOException e) {
+            System.err.println("Warning: failed to read " + readable + ": " + e.getMessage());
+            return new LegacyYamlLoad(config, false, false, false, false);
+        }
+    }
+
+    static AppConfig applyLegacyFileValues(AppConfig base, Map<String, String> values) {
         int legacyMaxTokens = values.containsKey("maxTokens")
                 ? AppConfig.parseIntValue(values.get("maxTokens"), base.contextWindow())
                 : base.contextWindow();
@@ -88,32 +118,24 @@ public final class AppConfigStore {
         ).withTokenLimits(contextWindow, maxOutputTokens, maxOutputTokenCap, maxOutputRetries);
     }
 
+    record LegacyYamlLoad(
+            AppConfig config,
+            boolean hasApiKey,
+            boolean hasContextWindow,
+            boolean hasMaxOutputTokens,
+            boolean hasMaxOutputTokenCap
+    ) {}
+
     private static String toYaml(AppConfig config) {
         return """
-                # AiCode local configuration (generated)
-                apiKey: %s
-                baseUrl: %s
-                model: %s
-                providerType: %s
+                # AiCode workspace settings (model/API: ~/.aicode/models.json)
                 agentName: %s
                 agentIcon: "%s"
                 workspace: %s
-                contextWindow: %d
-                maxOutputTokens: %d
-                maxOutputTokenCap: %d
-                maxOutputRetries: %d
                 """.formatted(
-                yamlScalar(config.apiKey()),
-                yamlScalar(config.baseUrl()),
-                yamlScalar(config.model()),
-                yamlScalar(config.providerType()),
                 yamlScalar(config.agentName()),
                 config.agentIcon(),
-                yamlScalar(config.workspace().toString()),
-                config.contextWindow(),
-                config.maxOutputTokens(),
-                config.maxOutputTokenCap(),
-                config.maxOutputRetries()
+                yamlScalar(config.workspace().toString())
         );
     }
 
@@ -152,5 +174,17 @@ public final class AppConfigStore {
                     .replace("\\\\", "\\");
         }
         return value;
+    }
+
+    private static Path resolveReadableConfigPath() {
+        Path primary = configPath();
+        if (Files.isRegularFile(primary)) {
+            return primary;
+        }
+        Path legacy = WorkingDirectory.effective().resolve(LEGACY_FILE_NAME);
+        if (Files.isRegularFile(legacy)) {
+            return legacy;
+        }
+        return primary;
     }
 }

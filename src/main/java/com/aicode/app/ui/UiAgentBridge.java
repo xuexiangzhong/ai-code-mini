@@ -2,7 +2,9 @@ package com.aicode.app.ui;
 
 import com.aicode.app.event.AgentEvent;
 import com.aicode.app.event.AgentEventListener;
+import com.aicode.app.session.FileEditProposal;
 
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -11,6 +13,7 @@ public final class UiAgentBridge implements AgentEventListener {
     private final Consumer<String> streamAppender;
     private final Consumer<String> activityAppender;
     private final BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler;
+    private final Consumer<FileEditProposal> fileEditHandler;
     private final StringBuilder streaming = new StringBuilder();
 
     public UiAgentBridge(
@@ -18,9 +21,19 @@ public final class UiAgentBridge implements AgentEventListener {
             Consumer<String> activityAppender,
             BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler
     ) {
+        this(streamAppender, activityAppender, approvalHandler, null);
+    }
+
+    public UiAgentBridge(
+            Consumer<String> streamAppender,
+            Consumer<String> activityAppender,
+            BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler,
+            Consumer<FileEditProposal> fileEditHandler
+    ) {
         this.streamAppender = streamAppender;
         this.activityAppender = activityAppender;
         this.approvalHandler = approvalHandler;
+        this.fileEditHandler = fileEditHandler;
     }
 
     @Override
@@ -40,6 +53,18 @@ public final class UiAgentBridge implements AgentEventListener {
                     activityAppender.accept("▶ " + e.toolName() + " " + summarizeInput(e.input()));
             case AgentEvent.ToolCallFinished e ->
                     activityAppender.accept("✔ " + e.toolName() + " (" + e.durationMs() + "ms)");
+            case AgentEvent.FileEditProposed e -> {
+                activityAppender.accept("📝 " + Path.of(e.filePath()).getFileName());
+                if (fileEditHandler != null) {
+                    fileEditHandler.accept(new FileEditProposal(
+                            e.editId(),
+                            Path.of(e.filePath()),
+                            e.oldContent(),
+                            e.newContent(),
+                            e.created()
+                    ));
+                }
+            }
             case AgentEvent.ApprovalRequired e ->
                     approvalHandler.accept(e, () -> {});
             case AgentEvent.Error e -> activityAppender.accept("✖ " + e.message());

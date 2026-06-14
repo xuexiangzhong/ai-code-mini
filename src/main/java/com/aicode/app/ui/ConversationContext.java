@@ -7,6 +7,9 @@ public final class ConversationContext {
     private final ConversationTranscript transcript = new ConversationTranscript();
     private UiAgentBridge bridge;
     private volatile boolean generating;
+    private int oldestLoadedTurnIndex;
+    private int totalTurns;
+    private volatile boolean loadingOlderTurns;
 
     public ConversationContext(String sessionId, String title) {
         this.sessionId = sessionId;
@@ -48,5 +51,30 @@ public final class ConversationContext {
 
     public void setGenerating(boolean generating) {
         this.generating = generating;
+    }
+
+    public int oldestLoadedTurnIndex() {
+        return oldestLoadedTurnIndex;
+    }
+
+    public int totalTurns() {
+        return totalTurns;
+    }
+
+    public boolean hasOlderTurns() {
+        return oldestLoadedTurnIndex > 0;
+    }
+
+    public boolean loadingOlderTurns() {
+        return loadingOlderTurns;
+    }
+
+    public void setLoadingOlderTurns(boolean loadingOlderTurns) {
+        this.loadingOlderTurns = loadingOlderTurns;
+    }
+
+    public void setTranscriptPagination(int oldestLoadedTurnIndex, int totalTurns) {
+        this.oldestLoadedTurnIndex = oldestLoadedTurnIndex;
+        this.totalTurns = totalTurns;
     }
 }

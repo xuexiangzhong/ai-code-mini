@@ -136,6 +136,37 @@ public final class EditorTabManager extends VBox {
         return editorPane;
     }
 
+    public void reloadFile(Path path, String content) {
+        Path key = normalize(path);
+        EditorTab tab = tabs.get(key);
+        if (tab != null) {
+            tab.setContent(content);
+            tab.markClean();
+            if (activeTab == tab) {
+                editorPane.openFile(content, tab.language());
+                editorPane.markClean();
+            }
+            refreshTabTitle(tab);
+            status("已刷新: " + key);
+            return;
+        }
+        openFile(path, content);
+    }
+
+    public void closeFile(Path path) {
+        Path key = normalize(path);
+        EditorTab tab = tabs.remove(key);
+        if (tab != null) {
+            tabPane.getTabs().remove(tab.tab());
+            if (activeTab == tab) {
+                activeTab = null;
+            }
+            if (tabs.isEmpty()) {
+                notifyAllTabsClosed();
+            }
+        }
+    }
+
     private void cacheEditorContent(EditorTab tab) {
         if (tab == null) {
             return;

@@ -19,22 +19,26 @@ class AppConfigStoreTest {
         try {
             System.setProperty("user.dir", tempDir.toString());
             AppConfig config = AppConfig.withDefaults().withValues(
-                    "test-key-123",
-                    "https://api.example.com",
-                    "test-model",
-                    "openai-compatible",
-                    "Test",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Test Agent",
                     "🧪",
-                    tempDir
+                    tempDir.resolve("workspace")
             );
             AppConfigStore.save(config);
 
             assertTrue(Files.exists(tempDir.resolve(AppConfigStore.FILE_NAME)));
-            AppConfig loaded = AppConfigStore.load();
-            assertEquals("test-key-123", loaded.apiKey());
-            assertEquals("https://api.example.com", loaded.baseUrl());
-            assertEquals("test-model", loaded.model());
-            assertTrue(loaded.isConfigured());
+            String yaml = Files.readString(tempDir.resolve(AppConfigStore.FILE_NAME));
+            assertFalse(yaml.contains("apiKey"));
+            assertFalse(yaml.contains("baseUrl"));
+            assertTrue(yaml.contains("Test Agent"));
+
+            AppConfig loadedYaml = AppConfigStore.loadYaml();
+            assertEquals("Test Agent", loadedYaml.agentName());
+            assertEquals("🧪", loadedYaml.agentIcon());
+            assertEquals(tempDir.resolve("workspace"), loadedYaml.workspace());
         } finally {
             System.setProperty("user.dir", originalUserDir.toString());
         }

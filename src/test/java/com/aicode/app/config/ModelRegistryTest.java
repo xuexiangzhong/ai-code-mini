@@ -14,11 +14,14 @@ class ModelRegistryTest {
 
     @Test
     void saveAndLoadRoundTrip() throws Exception {
-        Path originalUserDir = Path.of(System.getProperty("user.dir"));
+        String originalUserHome = System.getProperty("aicode.user.home");
+        String originalUserDir = System.getProperty("user.dir");
+        Path isolated = tempDir.resolve("save-load");
         try {
-            System.setProperty("user.dir", tempDir.toString());
+            System.setProperty("aicode.user.home", isolated.toString());
+            System.setProperty("user.dir", isolated.toString());
             ModelRegistry registry = new ModelRegistry();
-            ModelProfile profile = new ModelProfile(
+            ModelProfile profile = ModelProfile.of(
                     "test-1", "Test", "https://api.example.com", "key-123", "gpt-test", "openai-compatible");
             registry.add(profile);
             registry.setDefaultModelId("test-1");
@@ -30,13 +33,32 @@ class ModelRegistryTest {
             assertEquals("key-123", loaded.defaultModel().apiKey());
             assertTrue(loaded.hasUsableModel());
         } finally {
-            System.setProperty("user.dir", originalUserDir.toString());
+            if (originalUserHome != null) {
+                System.setProperty("aicode.user.home", originalUserHome);
+            } else {
+                System.clearProperty("aicode.user.home");
+            }
+            System.setProperty("user.dir", originalUserDir);
         }
     }
 
     @Test
     void loadWithoutDirUsesDefaults() {
-        ModelRegistry registry = ModelRegistry.load();
-        assertNotNull(registry.defaultModel());
+        String originalUserHome = System.getProperty("aicode.user.home");
+        String originalUserDir = System.getProperty("user.dir");
+        Path isolated = tempDir.resolve("empty-home");
+        try {
+            System.setProperty("aicode.user.home", isolated.toString());
+            System.setProperty("user.dir", isolated.toString());
+            ModelRegistry registry = ModelRegistry.load();
+            assertNotNull(registry.defaultModel());
+        } finally {
+            if (originalUserHome != null) {
+                System.setProperty("aicode.user.home", originalUserHome);
+            } else {
+                System.clearProperty("aicode.user.home");
+            }
+            System.setProperty("user.dir", originalUserDir);
+        }
     }
 }

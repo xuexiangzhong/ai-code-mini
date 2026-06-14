@@ -7,6 +7,7 @@ public sealed interface AgentEvent permits
         AgentEvent.TextDone,
         AgentEvent.ToolCallStarted,
         AgentEvent.ToolCallFinished,
+        AgentEvent.FileEditProposed,
         AgentEvent.ApprovalRequired,
         AgentEvent.ApprovalResolved,
         AgentEvent.Error,
@@ -21,6 +22,15 @@ public sealed interface AgentEvent permits
     record ToolCallStarted(String toolName, Map<String, Object> input, String callId) implements AgentEvent {}
 
     record ToolCallFinished(String toolName, String callId, String result, long durationMs) implements AgentEvent {}
+
+    record FileEditProposed(
+            String editId,
+            String filePath,
+            String oldContent,
+            String newContent,
+            boolean created,
+            String diff
+    ) implements AgentEvent {}
 
     record ApprovalRequired(
             String approvalId,

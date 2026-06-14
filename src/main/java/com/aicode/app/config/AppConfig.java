@@ -5,7 +5,8 @@ import com.aicode.agent.llm.OutputTokenLimits;
 import java.nio.file.Path;
 
 /**
- * Application configuration loaded from {@code ./aicode.yaml}, environment variables, and defaults.
+ * Runtime configuration assembled from {@code ~/.aicode/models.json} (model/API/tokens)
+ * and {@code ./aicode.yaml} (workspace/agent display).
  */
 public record AppConfig(
         String apiKey,
@@ -31,6 +32,10 @@ public record AppConfig(
     private static final int DEFAULT_PORT = 8765;
     private static final int DEFAULT_MAX_ITERATIONS = 50;
     private static final int DEFAULT_CONTEXT_WINDOW = 32768;
+
+    public static int defaultContextWindow() {
+        return DEFAULT_CONTEXT_WINDOW;
+    }
     private static final int DEFAULT_MAX_OUTPUT_TOKENS = OutputTokenLimits.DEFAULT_BASE;
     private static final int DEFAULT_MAX_OUTPUT_TOKEN_CAP = OutputTokenLimits.DEFAULT_CAP;
     private static final int DEFAULT_MAX_OUTPUT_RETRIES = OutputTokenLimits.DEFAULT_RETRIES;
@@ -61,19 +66,14 @@ public record AppConfig(
     }
 
     public static AppConfig applyEnvironment(AppConfig base) {
-        String apiKey = firstNonBlank(
-                env("DEEPSEEK_API_KEY", ""),
-                env("OPENAI_API_KEY", ""),
-                base.apiKey()
-        );
         String workspaceEnv = env("AICODE_WORKSPACE", "");
         Path workspace = workspaceEnv.isBlank() ? base.workspace() : Path.of(workspaceEnv);
 
         return base.withValues(
-                apiKey,
-                envOrDefault("LLM_BASE_URL", base.baseUrl()),
-                envOrDefault("LLM_MODEL", base.model()),
-                envOrDefault("LLM_PROVIDER", base.providerType()),
+                base.apiKey(),
+                base.baseUrl(),
+                base.model(),
+                base.providerType(),
                 envOrDefault("AGENT_NAME", base.agentName()),
                 envOrDefault("AGENT_ICON", base.agentIcon()),
                 workspace
@@ -146,24 +146,11 @@ public record AppConfig(
         return value != null && !value.isBlank() ? value : defaultValue;
     }
 
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return "";
-    }
-
     static int parseIntValue(String value, int defaultValue) {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
             return defaultValue;
         }
-    }
-
-    private static int parseInt(String value, int defaultValue) {
-        return parseIntValue(value, defaultValue);
     }
 }

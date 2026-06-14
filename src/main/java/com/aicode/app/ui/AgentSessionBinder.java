@@ -1,12 +1,16 @@
 package com.aicode.app.ui;
 
+import com.aicode.agent.TurnContext;
 import com.aicode.app.application.AgentApplication;
 import com.aicode.app.config.AppConfig;
 import com.aicode.app.config.ModelProfile;
+import com.aicode.app.config.WorkingDirectory;
 import com.aicode.app.event.AgentEvent;
 import com.aicode.app.session.AgentSession;
 import com.aicode.app.session.AgentSessionService;
 import com.aicode.app.session.ChatMode;
+import com.aicode.app.session.ConversationTranscriptLoader;
+import com.aicode.app.session.SessionPersistence;
 import com.aicode.app.ui.dialog.ApprovalDialog;
 import javafx.application.Platform;
 import javafx.scene.control.Button;
@@ -14,6 +18,9 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 
 import java.nio.file.Path;
@@ -42,6 +49,7 @@ public final class AgentSessionBinder {
     private ListView<ConversationContext> conversationList;
     private StreamingChatAppender streamingChat;
     private ModelProfile activeModel;
+    private DiffReviewPanel diffReviewPanel;
     private Consumer<String> toolLogConsumer;
 
     public AgentSessionBinder(
@@ -104,13 +112,42 @@ public final class AgentSessionBinder {
         this.toolLogConsumer = toolLogConsumer;
     }
 
+    public void setDiffReviewPanel(DiffReviewPanel diffReviewPanel) {
+        this.diffReviewPanel = diffReviewPanel;
+    }
+
     public void bindConversations(ListView<ConversationContext> listView, Button newButton) {
         this.conversationList = listView;
         listView.setCellFactory(lv -> new ListCell<>() {
+            private final HBox row = new HBox(6);
+            private final Label titleLabel = new Label();
+            private final Region spacer = new Region();
+            private final Button closeButton = new Button("×");
+
+            {
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+                closeButton.getStyleClass().add("conversation-close");
+                closeButton.setOnAction(e -> {
+                    ConversationContext item = getItem();
+                    if (item != null) {
+                        closeConversation(item);
+                    }
+                });
+                row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                row.getChildren().addAll(titleLabel, spacer, closeButton);
+            }
+
             @Override
             protected void updateItem(ConversationContext item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.title());
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    return;
+                }
+                setText(null);
+                titleLabel.setText(item.title());
+                setGraphic(row);
             }
         });
         listView.getItems().setAll(conversations);
@@ -132,6 +169,24 @@ public final class AgentSessionBinder {
         chatInput.setOnSubmit(() -> {
             if (active == null || !active.generating()) {
                 sendMessage();
+            }
+        });
+        sendButton.sceneProperty().addListener((obs, old, scene) -> {
+            if (scene == null) {
+                return;
+            }
+            javafx.stage.Window window = scene.getWindow();
+            if (window instanceof Stage stage) {
+                stage.addEventHandler(javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST, event -> {
+                    if (sessionService != null) {
+                        sessionService.flushAllSessions();
+                    }
+                });
+            }
+        });
+        chatView.setOnLoadOlder(() -> {
+            if (active != null) {
+                loadOlderTurns(active);
             }
         });
     }
@@ -157,7 +212,7 @@ public final class AgentSessionBinder {
     }
 
     public void updateWorkspace(Path workspace) {
-        this.workspaceRoot = workspace;
+        this.workspaceRoot = WorkingDirectory.normalizeWorkspace(workspace);
         refreshAgentState();
     }
 
@@ -174,6 +229,9 @@ public final class AgentSessionBinder {
     }
 
     public void refreshAgentState() {
+        if (sessionService != null) {
+            sessionService.flushAllSessions();
+        }
         conversations.clear();
         active = null;
         if (conversationList != null) {
@@ -186,7 +244,7 @@ public final class AgentSessionBinder {
                 AppConfig config = activeModel.toAppConfig(workspaceRoot);
                 application = new AgentApplication(config);
                 sessionService = new AgentSessionService(application, false);
-                createNewConversation();
+                restoreOrCreateConversations();
                 updateInputState();
             } catch (RuntimeException e) {
                 sendButton.setDisable(true);
@@ -201,12 +259,56 @@ public final class AgentSessionBinder {
         }
     }
 
+    private void restoreOrCreateConversations() {
+        if (sessionService == null) {
+            return;
+        }
+        List<SessionPersistence.StoredSession> stored =
+                sessionService.loadStoredSessions(workspaceRoot);
+        if (stored.isEmpty()) {
+            createNewConversation();
+            return;
+        }
+        for (SessionPersistence.StoredSession saved : stored) {
+            AgentSession session = sessionService.restoreSession(saved);
+            ConversationContext context = buildConversation(session.sessionId(), saved.title());
+            loadRecentTranscript(context);
+            conversations.add(context);
+        }
+        if (conversationList != null) {
+            conversationList.getItems().setAll(conversations);
+        }
+        switchConversation(conversations.getFirst());
+    }
+
+    public void closeConversation(ConversationContext context) {
+        if (sessionService == null || context == null) {
+            return;
+        }
+        sessionService.closeSession(context.sessionId());
+        conversations.remove(context);
+        if (conversationList != null) {
+            conversationList.getItems().setAll(conversations);
+        }
+        if (active == context) {
+            streamingChat.resetPending();
+            active = null;
+            chatView.clear();
+            if (!conversations.isEmpty()) {
+                switchConversation(conversations.getFirst());
+            } else {
+                createNewConversation();
+            }
+        }
+    }
+
     public void createNewConversation() {
         if (sessionService == null) {
             return;
         }
         String title = "新对话 " + (conversations.size() + 1);
         AgentSession session = sessionService.createSession(workspaceRoot);
+        sessionService.setSessionTitle(session.sessionId(), title);
         ConversationContext context = buildConversation(session.sessionId(), title);
         conversations.add(context);
         if (conversationList != null) {
@@ -225,7 +327,12 @@ public final class AgentSessionBinder {
                         toolLogConsumer.accept(text);
                     }
                 },
-                (event, onComplete) -> showApproval(context, event, onComplete)
+                (event, onComplete) -> showApproval(context, event, onComplete),
+                proposal -> {
+                    if (diffReviewPanel != null) {
+                        diffReviewPanel.propose(proposal);
+                    }
+                }
         ));
         return context;
     }
@@ -233,7 +340,7 @@ public final class AgentSessionBinder {
     private void switchConversation(ConversationContext context) {
         streamingChat.resetPending();
         active = context;
-        chatView.loadTurns(context.transcript().turns());
+        presentConversationFromDisk(context);
         if (statusShowsConversationTitle) {
             statusLabel.setText(context.generating() ? "生成中..." : context.title());
         }
@@ -241,6 +348,46 @@ public final class AgentSessionBinder {
             conversationList.getSelectionModel().select(context);
         }
         updateInputState();
+    }
+
+    private void presentConversationFromDisk(ConversationContext context) {
+        if (sessionService == null) {
+            chatView.clear();
+            return;
+        }
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        SessionPersistence.HistoryPage page = ConversationTranscriptLoader.loadRecentPage(
+                context.transcript(),
+                sessionService,
+                workspaceRoot,
+                context.sessionId(),
+                mode
+        );
+        context.setTranscriptPagination(page.startIndex(), page.totalTurns());
+        chatView.loadTurns(context.transcript().turns());
+        chatView.setHasOlderTurns(page.hasOlder());
+    }
+
+    private void loadOlderTurns(ConversationContext context) {
+        if (sessionService == null || context.loadingOlderTurns() || !context.hasOlderTurns()) {
+            chatView.finishLoadingOlderTurns();
+            return;
+        }
+        context.setLoadingOlderTurns(true);
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        SessionPersistence.HistoryPage page = ConversationTranscriptLoader.loadOlderPage(
+                context.transcript(),
+                sessionService,
+                workspaceRoot,
+                context.sessionId(),
+                mode,
+                context.oldestLoadedTurnIndex()
+        );
+        context.setTranscriptPagination(page.startIndex(), page.totalTurns());
+        List<ChatTurn> prepended = context.transcript().turns().subList(0, page.turns().size());
+        chatView.prependTurns(prepended, page.hasOlder());
+        context.setLoadingOlderTurns(false);
+        chatView.finishLoadingOlderTurns();
     }
 
     private void sendMessage() {
@@ -255,23 +402,27 @@ public final class AgentSessionBinder {
         if (text.isEmpty()) {
             return;
         }
-        String contextPrefix = chatInput.attachments().buildPromptPrefix();
-        String payload = contextPrefix.isEmpty() ? text : contextPrefix + text;
+        String payload = chatInput.attachments().buildFullPrompt(text, workspaceRoot);
+        TurnContext turnContext = TurnContext.of(workspaceRoot, chatInput.activeFile());
         ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
         ConversationContext sending = active;
         chatInput.clearAfterSend();
         maybeUpdateTitle(sending, text);
         appendUser(sending, text);
+        sending.setTranscriptPagination(
+                sending.oldestLoadedTurnIndex(),
+                sending.totalTurns() + 1
+        );
         streamingChat.beginStream();
         sending.setGenerating(true);
         setGeneratingUi(true);
         statusLabel.setText("生成中...");
 
         if (mode == ChatMode.CHAT) {
-            sessionService.sendChatMessage(sending.sessionId(), payload, sending.bridge())
+            sessionService.sendChatMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         } else {
-            sessionService.sendAgentMessage(sending.sessionId(), payload, sending.bridge())
+            sessionService.sendAgentMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         }
     }
@@ -309,6 +460,9 @@ public final class AgentSessionBinder {
                 ? userMessage.substring(0, 28) + "…"
                 : userMessage;
         context.setTitle(shortTitle);
+        if (sessionService != null) {
+            sessionService.setSessionTitle(context.sessionId(), shortTitle);
+        }
         if (conversationList != null) {
             conversationList.refresh();
         }
@@ -337,12 +491,31 @@ public final class AgentSessionBinder {
         chatInput.setPromptText(mode == ChatMode.CHAT
                 ? "发送后续消息（问答模式）..."
                 : "发送后续消息...");
+        if (active != null) {
+            presentConversationFromDisk(active);
+        }
+    }
+
+    private void loadRecentTranscript(ConversationContext context) {
+        if (sessionService == null) {
+            return;
+        }
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        SessionPersistence.HistoryPage page = ConversationTranscriptLoader.loadRecentPage(
+                context.transcript(),
+                sessionService,
+                workspaceRoot,
+                context.sessionId(),
+                mode
+        );
+        context.setTranscriptPagination(page.startIndex(), page.totalTurns());
     }
 
     private void appendUser(ConversationContext context, String text) {
-        context.transcript().startTurn(text);
+        String createdAt = java.time.Instant.now().toString();
+        context.transcript().startTurn(text, createdAt);
         if (context == active) {
-            Platform.runLater(() -> chatView.startTurn(text));
+            Platform.runLater(() -> chatView.startTurn(text, createdAt));
         }
     }
 

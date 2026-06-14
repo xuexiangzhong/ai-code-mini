@@ -49,9 +49,11 @@ public final class Compressor {
                 sb.append("[Tool call: ").append(tub.name()).append("]\n");
             } else if (block instanceof ToolResultBlock trb) {
                 String content = trb.content();
+                int preview = Math.min(300, content.length());
                 sb.append("[Tool result: ")
-                        .append(content.substring(0, Math.min(200, content.length())))
-                        .append("]\n");
+                        .append(content, 0, preview)
+                        .append(content.length() > preview ? "…]" : "]")
+                        .append("\n");
             }
         }
         return sb.toString().stripTrailing();
@@ -67,15 +69,14 @@ public final class Compressor {
                 .toList());
 
         Message userMsg = Message.user(
-                "Summarize this conversation concisely. Focus on: what the user asked, "
-                        + "what tools were used, what was accomplished, and any important decisions "
-                        + "or findings.\n\n" + formatted
+                "Summarize this conversation for continuing work. Keep: user goals, files changed, "
+                        + "key decisions, errors resolved, and current task state. "
+                        + "Drop: repeated tool logs, exploratory dead ends, greetings.\n\n" + formatted
         );
 
         ChatOptions options = new ChatOptions(
-                "You are a conversation summarizer. Produce a concise summary that "
-                        + "captures the key information needed to continue the conversation. "
-                        + "Do not include pleasantries or meta-commentary.",
+                "You are a conversation summarizer. Write a concise factual summary in the user's "
+                        + "language when obvious from the transcript. No meta commentary.",
                 maxTokens,
                 null
         );

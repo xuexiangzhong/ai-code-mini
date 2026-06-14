@@ -198,6 +198,21 @@ class ContextTest {
             var msgs = List.of(msg("Hi"), msg("Hello"));
             assertEquals(2, Context.selectMessages(msgs, 1000).size());
         }
+
+        @Test
+        void keepsToolUseAndResultTogether() {
+            Message assistant = Message.assistant(
+                    List.of(new ToolUseBlock("t1", "read_file", Map.of("path", "a.txt"))));
+            Message toolResult = Message.userBlocks(List.of(new ToolResultBlock("t1", "file contents")));
+            var msgs = List.of(
+                    msg("First"),
+                    assistant,
+                    toolResult,
+                    msg("Follow up")
+            );
+            var selected = Context.selectMessages(msgs, 80);
+            assertEquals(selected.contains(assistant), selected.contains(toolResult));
+        }
     }
 
     @Nested

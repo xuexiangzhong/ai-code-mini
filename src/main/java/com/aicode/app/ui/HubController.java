@@ -37,6 +37,7 @@ public final class HubController {
     @FXML private Button editModelButton;
     @FXML private Button deleteModelButton;
     @FXML private Button defaultModelButton;
+    @FXML private Button openConfigFolderButton;
     @FXML private Button openProjectButton;
     @FXML private Button openAgentsButton;
 
@@ -46,7 +47,8 @@ public final class HubController {
 
     @FXML
     void initialize() {
-        configPathLabel.setText("配置目录: " + AicodePaths.root() + " （不存在时不影响启动，保存时自动创建）");
+        configPathLabel.setText(AicodePaths.modelsFile().toString());
+        openConfigFolderButton.setOnAction(e -> openConfigFolder());
         modelList.setCellFactory(lv -> new ListCell<>() {
             @Override
             protected void updateItem(ModelProfile item, boolean empty) {
@@ -57,7 +59,7 @@ public final class HubController {
                 }
                 String mark = item.id().equals(registry().defaultModelId()) ? "★ " : "  ";
                 String key = item.isUsable() ? "" : " [未配置 Key]";
-                setText(mark + item.displayLabel() + key);
+                setText(mark + item.displayLabel() + " · " + item.contextWindowLabel() + key);
             }
         });
         addModelButton.setOnAction(e -> addModel());
@@ -172,6 +174,20 @@ public final class HubController {
                 case DISMISS -> {}
             }
         });
+    }
+
+    private void openConfigFolder() {
+        try {
+            AicodePaths.ensureUserRootExists();
+            Path dir = AicodePaths.userRoot();
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                Desktop.getDesktop().open(dir.toFile());
+            } else {
+                statusLabel.setText("请手动打开: " + dir);
+            }
+        } catch (Exception e) {
+            statusLabel.setText("无法打开文件夹: " + e.getMessage());
+        }
     }
 
     private void openGuideInBrowser() {

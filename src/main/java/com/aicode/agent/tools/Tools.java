@@ -13,9 +13,12 @@ public final class Tools {
 
     public static final Tool READ_TOOL = ReadTool.DEFINITION;
     public static final Tool WRITE_TOOL = WriteTool.DEFINITION;
+    public static final Tool SEARCH_REPLACE_TOOL = SearchReplaceTool.DEFINITION;
+    public static final Tool DELETE_TOOL = DeleteTool.DEFINITION;
     public static final Tool BASH_TOOL = BashTool.DEFINITION;
     public static final Tool GLOB_TOOL = GlobTool.DEFINITION;
     public static final Tool GREP_TOOL = GrepTool.DEFINITION;
+    public static final Tool LIST_DIR_TOOL = ListDirTool.DEFINITION;
 
     public static String executeRead(ReadTool.Input input) {
         return ReadTool.execute(input);

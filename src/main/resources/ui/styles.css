@@ -129,6 +129,18 @@
     -fx-text-fill: #e4e4e4;
 }
 
+.conversation-close, .agent-ws-session-close {
+    -fx-background-color: transparent;
+    -fx-text-fill: #6e6e6e;
+    -fx-font-size: 14px;
+    -fx-padding: 0 4;
+    -fx-cursor: hand;
+}
+
+.conversation-close:hover, .agent-ws-session-close:hover {
+    -fx-text-fill: #e4e4e4;
+}
+
 .terminal-panel, .activity-panel {
     -fx-background-color: #181818;
     -fx-border-color: #2b2b2b;
@@ -206,6 +218,11 @@
 .chat-turn {
     -fx-spacing: 8;
     -fx-padding: 0 0 4 0;
+}
+
+.chat-turn-time {
+    -fx-text-fill: #888888;
+    -fx-font-size: 11px;
 }
 
 .chat-row-user {
@@ -395,6 +412,32 @@
 .at-mention-textarea {
     -fx-font-size: 13px;
     -fx-padding: 4 0;
+}
+
+.diff-review-panel {
+    -fx-background-color: #222222;
+    -fx-border-color: #333333;
+    -fx-border-width: 1 0 0 0;
+}
+
+.diff-review-title {
+    -fx-text-fill: #c8c8c8;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+.diff-review-list {
+    -fx-background-color: #1a1a1a;
+    -fx-border-color: #333333;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+}
+
+.diff-review-text {
+    -fx-control-inner-background: #1a1a1a;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+    -fx-font-size: 11px;
 }
 
 .at-mention-popup {

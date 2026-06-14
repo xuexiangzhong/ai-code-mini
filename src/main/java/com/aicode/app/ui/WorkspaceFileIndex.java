@@ -15,27 +15,42 @@ import java.util.concurrent.atomic.AtomicReference;
 /** Flat index of workspace files for @ mention search. */
 public final class WorkspaceFileIndex {
     public record Entry(Path absolute, String relative, String name) {}
+    public record DirEntry(Path absolute, String relative) {}
 
     private static final int MAX_FILES = 3000;
+    private static final int MAX_DIRS = 800;
     private static final List<String> SKIP_DIRS = List.of(
             ".git", "node_modules", "target", "build", "dist", ".idea", ".vscode", "editor/vs"
     );
 
     private final AtomicReference<List<Entry>> entries = new AtomicReference<>(List.of());
+    private final AtomicReference<List<DirEntry>> directories = new AtomicReference<>(List.of());
 
     public List<Entry> entries() {
         return entries.get();
     }
 
+    public List<DirEntry> directories() {
+        return directories.get();
+    }
+
     public void rebuildAsync(Path workspace, Runnable onReady) {
         Thread.ofVirtual().name("workspace-file-index").start(() -> {
             List<Entry> found = new ArrayList<>();
+            List<DirEntry> dirs = new ArrayList<>();
             try {
                 Files.walkFileTree(workspace, new SimpleFileVisitor<>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                         if (found.size() >= MAX_FILES) {
                             return FileVisitResult.TERMINATE;
+                        }
+                        if (!dir.equals(workspace) && dirs.size() < MAX_DIRS) {
+                            String dn = dir.getFileName().toString();
+                            if (!SKIP_DIRS.contains(dn)) {
+                                String relative = workspace.relativize(dir).toString().replace('\\', '/');
+                                dirs.add(new DirEntry(dir, relative));
+                            }
                         }
                         if (dir.equals(workspace)) {
                             return FileVisitResult.CONTINUE;
@@ -64,11 +79,31 @@ public final class WorkspaceFileIndex {
                 // partial index ok
             }
             found.sort((a, b) -> a.relative().compareToIgnoreCase(b.relative()));
+            dirs.sort((a, b) -> a.relative().compareToIgnoreCase(b.relative()));
             entries.set(Collections.unmodifiableList(found));
+            directories.set(Collections.unmodifiableList(dirs));
             if (onReady != null) {
                 javafx.application.Platform.runLater(onReady);
             }
         });
+    }
+
+    public List<DirEntry> searchDirectories(String query, int limit) {
+        String q = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
+        List<DirEntry> all = directories.get();
+        if (q.isEmpty()) {
+            return all.size() <= limit ? all : all.subList(0, limit);
+        }
+        List<DirEntry> hits = new ArrayList<>();
+        for (DirEntry entry : all) {
+            if (entry.relative().toLowerCase(Locale.ROOT).contains(q)) {
+                hits.add(entry);
+                if (hits.size() >= limit) {
+                    break;
+                }
+            }
+        }
+        return hits;
     }
 
     public List<Entry> search(String query, int limit) {

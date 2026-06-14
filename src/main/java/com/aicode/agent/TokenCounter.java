@@ -103,7 +103,10 @@ public final class TokenCounter {
     }
 
     public static Integer getModelContextLimit(String model) {
-        return MODEL_CONTEXT_LIMITS.get(model);
+        if (model == null || model.isBlank()) {
+            return null;
+        }
+        return com.aicode.app.config.ModelContextLimits.forModel(model);
     }
 
     public record ContextBudget(int maxContextTokens, int reservedForResponse) {

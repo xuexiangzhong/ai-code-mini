@@ -2,6 +2,7 @@ package com.aicode.agent;
 
 import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.Tool;
+import com.aicode.agent.llm.ToolUseBlock;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -122,6 +123,9 @@ public final class Context {
     }
 
     public static List<Message> selectMessages(List<Message> messages, int maxTokens) {
+        if (messages.isEmpty()) {
+            return List.of();
+        }
         if (messages.size() <= 2) {
             return List.copyOf(messages);
         }
@@ -132,18 +136,49 @@ public final class Context {
         }
         int budget = maxTokens - firstTokens;
         List<Message> tail = new ArrayList<>();
-        for (int i = messages.size() - 1; i > 0; i--) {
-            int tokens = TokenCounter.estimateMessageTokens(messages.get(i));
+        for (int i = messages.size() - 1; i > 0; ) {
+            Message current = messages.get(i);
+            if (isToolResultUser(current) && i > 0 && isToolUseAssistant(messages.get(i - 1))) {
+                Message assistant = messages.get(i - 1);
+                int pairTokens = TokenCounter.estimateMessageTokens(assistant)
+                        + TokenCounter.estimateMessageTokens(current);
+                if (pairTokens > budget) {
+                    break;
+                }
+                budget -= pairTokens;
+                tail.addFirst(current);
+                tail.addFirst(assistant);
+                i -= 2;
+                continue;
+            }
+            int tokens = TokenCounter.estimateMessageTokens(current);
             if (tokens > budget) {
                 break;
             }
             budget -= tokens;
-            tail.addFirst(messages.get(i));
+            tail.addFirst(current);
+            i--;
         }
         List<Message> result = new ArrayList<>();
         result.add(first);
         result.addAll(tail);
         return result;
+    }
+
+    private static boolean isToolResultUser(Message message) {
+        return "user".equals(message.role()) && !message.isStringContent();
+    }
+
+    private static boolean isToolUseAssistant(Message message) {
+        if (!"assistant".equals(message.role()) || message.isStringContent()) {
+            return false;
+        }
+        for (var block : message.contentBlocks()) {
+            if (block instanceof ToolUseBlock) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static final List<Map.Entry<Pattern, String>> POISON_PATTERNS = List.of(

@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 public final class ModelRegistry {
     private static final ObjectMapper MAPPER = new ObjectMapper()
@@ -20,22 +19,22 @@ public final class ModelRegistry {
 
     public static ModelRegistry load() {
         ModelRegistry registry = new ModelRegistry();
-        Path file = AicodePaths.modelsFile();
-        if (Files.isRegularFile(file)) {
+        Path userFile = AicodePaths.modelsFile();
+        if (Files.isRegularFile(userFile)) {
             try {
-                registry.applyData(MAPPER.readValue(file.toFile(), ModelRegistryData.class));
+                registry.applyData(MAPPER.readValue(userFile.toFile(), ModelRegistryData.class));
             } catch (IOException e) {
-                System.err.println("Warning: failed to read " + file + ": " + e.getMessage());
+                System.err.println("Warning: failed to read " + userFile + ": " + e.getMessage());
             }
         } else {
-            registry.migrateLegacyConfig();
+            registry.migrateLegacyYaml();
         }
         registry.applyEnvironmentDefaults();
         return registry;
     }
 
     public void save() throws IOException {
-        AicodePaths.ensureRootExists();
+        AicodePaths.ensureUserRootExists();
         ModelRegistryData data = new ModelRegistryData();
         data.defaultModelId = defaultModelId;
         data.models = List.copyOf(models);
@@ -104,19 +103,33 @@ public final class ModelRegistry {
         defaultModelId = data.defaultModelId != null ? data.defaultModelId : "";
     }
 
-    private void migrateLegacyConfig() {
-        AppConfig legacy = AppConfigStore.load();
-        if (!legacy.isConfigured()) {
+    private void migrateLegacyYaml() {
+        AppConfigStore.LegacyYamlLoad legacyLoad = AppConfigStore.loadLegacyYamlForMigration();
+        AppConfig legacy = AppConfig.applyEnvironment(legacyLoad.config());
+        if (!legacyLoad.hasApiKey() || !legacy.isConfigured()) {
             return;
         }
         String id = "migrated";
+        Integer contextWindow = legacyLoad.hasContextWindow() && legacy.contextWindow() > 0
+                ? legacy.contextWindow()
+                : null;
+        Integer maxOutput = legacyLoad.hasMaxOutputTokens() && legacy.maxOutputTokens() > 0
+                ? legacy.maxOutputTokens()
+                : null;
+        Integer maxCap = legacyLoad.hasMaxOutputTokenCap() && legacy.maxOutputTokenCap() > 0
+                ? legacy.maxOutputTokenCap()
+                : null;
         add(new ModelProfile(
                 id,
                 "已迁移配置",
                 legacy.baseUrl(),
                 legacy.apiKey(),
                 legacy.model(),
-                legacy.providerType()
+                legacy.providerType(),
+                contextWindow,
+                maxOutput,
+                maxCap,
+                legacy.maxOutputRetries() > 0 ? legacy.maxOutputRetries() : null
         ));
         defaultModelId = id;
         try {
@@ -130,23 +143,46 @@ public final class ModelRegistry {
         if (!models.isEmpty()) {
             return;
         }
-        AppConfig env = AppConfig.applyEnvironment(AppConfig.withDefaults());
-        if (!env.isConfigured()) {
+        String apiKey = firstNonBlank(
+                env("DEEPSEEK_API_KEY", ""),
+                env("OPENAI_API_KEY", "")
+        );
+        if (apiKey.isBlank()) {
             return;
         }
+        AppConfig env = AppConfig.withDefaults();
         String id = "env";
-        add(new ModelProfile(
+        add(ModelProfile.of(
                 id,
                 "环境变量",
-                env.baseUrl(),
-                env.apiKey(),
-                env.model(),
-                env.providerType()
+                envOrDefault("LLM_BASE_URL", env.baseUrl()),
+                apiKey,
+                envOrDefault("LLM_MODEL", env.model()),
+                envOrDefault("LLM_PROVIDER", env.providerType())
         ));
         defaultModelId = id;
     }
 
     public static ModelProfile newProfile() {
         return ModelProfile.createDefault();
+    }
+
+    private static String env(String key, String defaultValue) {
+        String value = System.getenv(key);
+        return value != null ? value : defaultValue;
+    }
+
+    private static String envOrDefault(String key, String defaultValue) {
+        String value = System.getenv(key);
+        return value != null && !value.isBlank() ? value : defaultValue;
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 }

@@ -17,9 +17,14 @@ import java.util.List;
 
 /** Scrollable chat area with styled user / assistant bubbles and a single activity strip per turn. */
 public final class ChatTranscriptView extends ScrollPane {
+    private static final double LOAD_OLDER_THRESHOLD = 0.08;
+
     private final VBox messageBox = new VBox(10);
     private Label streamingBody;
     private TurnUi currentTurn;
+    private Runnable onLoadOlder;
+    private boolean hasOlderTurns;
+    private boolean loadingOlderTurns;
 
     public ChatTranscriptView() {
         getStyleClass().add("chat-transcript");
@@ -31,6 +36,19 @@ public final class ChatTranscriptView extends ScrollPane {
         messageBox.setFillWidth(true);
         messageBox.setPadding(new Insets(6, 4, 12, 4));
         setContent(messageBox);
+        vvalueProperty().addListener((obs, oldValue, newValue) -> maybeLoadOlder(newValue.doubleValue()));
+    }
+
+    public void setOnLoadOlder(Runnable onLoadOlder) {
+        this.onLoadOlder = onLoadOlder;
+    }
+
+    public void setHasOlderTurns(boolean hasOlderTurns) {
+        this.hasOlderTurns = hasOlderTurns;
+    }
+
+    public void finishLoadingOlderTurns() {
+        loadingOlderTurns = false;
     }
 
     public void clear() {
@@ -47,9 +65,54 @@ public final class ChatTranscriptView extends ScrollPane {
         scrollToBottom();
     }
 
+    public void prependTurns(List<ChatTurn> turns, boolean hasOlder) {
+        if (turns == null || turns.isEmpty()) {
+            setHasOlderTurns(hasOlder);
+            return;
+        }
+        double oldHeight = contentHeight();
+        double oldScrollTop = getVvalue() * Math.max(1.0, oldHeight - getViewportBounds().getHeight());
+
+        for (int i = turns.size() - 1; i >= 0; i--) {
+            TurnUi ui = new TurnUi(new ArrayList<>(turns.get(i).activities()));
+            VBox turnBox = buildTurnShell(ui, turns.get(i).userText(), turns.get(i).createdAt());
+            if (!turns.get(i).assistantText().isEmpty()) {
+                ui.assistantBody = attachAssistantBlock(turnBox);
+                ui.assistantBody.setText(turns.get(i).assistantText());
+            }
+            refreshActivityRow(ui);
+            messageBox.getChildren().addFirst(turnBox);
+        }
+
+        layout();
+        double newHeight = contentHeight();
+        double delta = newHeight - oldHeight;
+        double viewport = getViewportBounds().getHeight();
+        if (delta > 0 && newHeight > viewport) {
+            setVvalue(Math.min(1.0, (oldScrollTop + delta) / (newHeight - viewport)));
+        }
+        setHasOlderTurns(hasOlder);
+    }
+
+    private double contentHeight() {
+        return messageBox.getBoundsInParent().getHeight();
+    }
+
+    private void maybeLoadOlder(double vvalue) {
+        if (onLoadOlder == null || loadingOlderTurns || !hasOlderTurns || vvalue > LOAD_OLDER_THRESHOLD) {
+            return;
+        }
+        loadingOlderTurns = true;
+        onLoadOlder.run();
+    }
+
     public void startTurn(String userText) {
+        startTurn(userText, java.time.Instant.now().toString());
+    }
+
+    public void startTurn(String userText, String createdAt) {
         currentTurn = new TurnUi(new ArrayList<>());
-        VBox turnBox = buildTurnShell(currentTurn, userText);
+        VBox turnBox = buildTurnShell(currentTurn, userText, createdAt);
         messageBox.getChildren().add(turnBox);
         scrollToBottom();
     }
@@ -107,8 +170,12 @@ public final class ChatTranscriptView extends ScrollPane {
     }
 
     public void appendStandaloneNotice(String text) {
+        appendStandaloneNotice(text, java.time.Instant.now().toString());
+    }
+
+    public void appendStandaloneNotice(String text, String createdAt) {
         TurnUi notice = new TurnUi(List.of(text.strip()));
-        messageBox.getChildren().add(buildTurnShell(notice, null));
+        messageBox.getChildren().add(buildTurnShell(notice, null, createdAt));
         refreshActivityRow(notice);
         scrollToBottom();
     }
@@ -120,19 +187,29 @@ public final class ChatTranscriptView extends ScrollPane {
 
     private void renderTurn(ChatTurn turn) {
         TurnUi ui = new TurnUi(new ArrayList<>(turn.activities()));
-        VBox turnBox = buildTurnShell(ui, turn.userText());
+        VBox turnBox = buildTurnShell(ui, turn.userText(), turn.createdAt());
         if (!turn.assistantText().isEmpty()) {
             ui.assistantBody = attachAssistantBlock(turnBox);
             ui.assistantBody.setText(turn.assistantText());
         }
         refreshActivityRow(ui);
+        messageBox.getChildren().add(turnBox);
     }
 
-    private VBox buildTurnShell(TurnUi ui, String userText) {
+    private VBox buildTurnShell(TurnUi ui, String userText, String createdAt) {
         VBox turnBox = new VBox(8);
         turnBox.getStyleClass().add("chat-turn");
         turnBox.setFillWidth(true);
         ui.turnBox = turnBox;
+
+        String timeLabel = TurnTimeFormat.display(createdAt);
+        if (!timeLabel.isEmpty()) {
+            Label time = new Label(timeLabel);
+            time.getStyleClass().add("chat-turn-time");
+            HBox timeRow = new HBox(time);
+            timeRow.setAlignment(Pos.CENTER_RIGHT);
+            turnBox.getChildren().add(timeRow);
+        }
 
         if (userText != null && !userText.isBlank()) {
             turnBox.getChildren().add(createUserBubble(userText));

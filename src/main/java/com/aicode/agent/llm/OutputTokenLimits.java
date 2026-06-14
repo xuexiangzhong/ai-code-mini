@@ -30,6 +30,6 @@ public record OutputTokenLimits(int base, int cap, int maxRetries) {
 
     public static String exhaustedMessage(int limit) {
         return "模型输出达到 token 上限 (" + limit + ")，内容可能不完整。"
-                + "请缩小修改范围，或在 aicode.yaml 中提高 maxOutputTokens。";
+                + "请缩小修改范围，或在 ~/.aicode/models.json 中提高 maxOutputTokens。";
     }
 }

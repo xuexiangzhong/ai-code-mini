@@ -2,6 +2,7 @@ package com.aicode.app;
 
 import com.aicode.agent.Repl;
 import com.aicode.app.application.AgentApplication;
+import com.aicode.app.config.AicodePaths;
 import com.aicode.app.config.AppConfig;
 import com.aicode.app.config.AppConfigStore;
 import com.aicode.app.event.TerminalEventListener;
@@ -81,9 +82,9 @@ public final class CliLauncher {
     private static String configHint() {
         return """
                 API Key 未配置。
-                请编辑当前目录下的 aicode.yaml 并设置 apiKey，或使用 JavaFX 界面配置后保存。
-                配置文件: %s
-                """.formatted(AppConfigStore.configPath()).strip();
+                请在 JavaFX 界面「模型配置」中添加模型并填写 Key，或编辑 ~/.aicode/models.json。
+                工作区配置: %s
+                """.formatted(AicodePaths.modelsFile()).strip();
     }
 
     private static void showBanner(AppConfig config) {
@@ -125,8 +126,8 @@ public final class CliLauncher {
                 row("     Dir:    " + cwd, GRAY, "     Dir:    ", PINK, cwd),
                 blank,
                 row(config.isConfigured()
-                                ? "     Config: aicode.yaml loaded"
-                                : "     Config: missing apiKey in aicode.yaml",
+                                ? "     Config: models.json loaded"
+                                : "     Config: missing API key in models.json",
                         GRAY,
                         config.isConfigured() ? "     Config: " : "     Config: ",
                         config.isConfigured() ? PINK : ROSE,

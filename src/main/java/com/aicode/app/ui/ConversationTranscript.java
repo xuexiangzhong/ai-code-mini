@@ -23,17 +23,57 @@ public final class ConversationTranscript {
     }
 
     public void startTurn(String userText) {
-        openTurn = new ChatTurn(userText);
+        startTurn(userText, java.time.Instant.now().toString());
+    }
+
+    public void startTurn(String userText, String createdAt) {
+        openTurn = new ChatTurn(userText, createdAt);
         turns.add(openTurn);
     }
 
     public void addStandaloneNotice(String text) {
+        addStandaloneNotice(text, java.time.Instant.now().toString());
+    }
+
+    public void addStandaloneNotice(String text, String createdAt) {
         if (text == null || text.isBlank()) {
             return;
         }
-        ChatTurn notice = new ChatTurn(null);
+        ChatTurn notice = new ChatTurn(null, createdAt);
         notice.addActivity(text.strip());
         turns.add(notice);
+        openTurn = null;
+    }
+
+    public void prependStandaloneNotice(String text) {
+        prependStandaloneNotice(text, null);
+    }
+
+    public void prependStandaloneNotice(String text, String createdAt) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        ChatTurn notice = new ChatTurn(null, createdAt);
+        notice.addActivity(text.strip());
+        turns.addFirst(notice);
+        openTurn = null;
+    }
+
+    public void prependTurn(String userText, List<String> activities, String assistantText) {
+        prependTurn(userText, activities, assistantText, null);
+    }
+
+    public void prependTurn(String userText, List<String> activities, String assistantText, String createdAt) {
+        ChatTurn turn = new ChatTurn(userText, createdAt);
+        if (activities != null) {
+            for (String activity : activities) {
+                turn.addActivity(activity);
+            }
+        }
+        if (assistantText != null && !assistantText.isBlank()) {
+            turn.appendAssistant(assistantText);
+        }
+        turns.addFirst(turn);
         openTurn = null;
     }
 

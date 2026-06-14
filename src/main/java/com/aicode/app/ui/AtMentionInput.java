@@ -69,6 +69,30 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
                 return "@" + entry.relative();
             }
         }
+
+        record Folder(WorkspaceFileIndex.DirEntry entry) implements MentionOption {
+            @Override
+            public String label() {
+                return "📁 " + entry.relative();
+            }
+
+            @Override
+            public String insertToken() {
+                return "@folder:" + entry.relative();
+            }
+        }
+
+        record Codebase() implements MentionOption {
+            @Override
+            public String label() {
+                return "Codebase · 语义检索代码库";
+            }
+
+            @Override
+            public String insertToken() {
+                return "@Codebase";
+            }
+        }
     }
 
     private final TextArea textArea = new TextArea();
@@ -187,6 +211,11 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
     public void clearAfterSend() {
         attachments.clear();
         clear();
+    }
+
+    @Override
+    public Path activeFile() {
+        return activeFileSupplier.get();
     }
 
     @Override
@@ -314,11 +343,23 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
         if (query.isEmpty() || "selection".startsWith(query.toLowerCase())) {
             filtered.add(new MentionOption.Selection(active));
         }
+        if (query.isEmpty() || "codebase".startsWith(query.toLowerCase())) {
+            filtered.add(new MentionOption.Codebase());
+        }
         if (active != null && (query.isEmpty()
                 || WorkingDirectory.displayName(active).toLowerCase().contains(query.toLowerCase()))) {
             filtered.add(new MentionOption.CurrentFile(active));
         }
         int remaining = POPUP_LIMIT - filtered.size();
+        if (remaining > 0) {
+            for (WorkspaceFileIndex.DirEntry entry : fileIndex.searchDirectories(query, Math.min(4, remaining))) {
+                filtered.add(new MentionOption.Folder(entry));
+                remaining--;
+                if (remaining <= 0) {
+                    break;
+                }
+            }
+        }
         if (remaining > 0) {
             for (WorkspaceFileIndex.Entry entry : fileIndex.search(query, remaining)) {
                 filtered.add(new MentionOption.File(entry));
@@ -334,8 +375,30 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
         switch (option) {
             case MentionOption.CurrentFile cf -> attachFile(cf.path(), cf.insertToken());
             case MentionOption.File f -> attachFile(f.entry().absolute(), f.insertToken());
+            case MentionOption.Folder folder -> attachFolder(folder.entry().absolute(), folder.insertToken());
+            case MentionOption.Codebase codebase -> attachCodebase(codebase.insertToken());
             case MentionOption.Selection sel -> attachSelection(sel);
         }
+    }
+
+    private void attachCodebase(String token) {
+        attachments.addCodebase();
+        insertToken(token + " ");
+    }
+
+    private void attachFolder(Path path, String token) {
+        Runnable insert = () -> insertToken(token + " ");
+        if (workspaceRoot == null) {
+            insert.run();
+            return;
+        }
+        Thread.ofVirtual().name("mention-folder-load").start(() -> {
+            String summary = ChatContextAttachments.summarizeFolder(workspaceRoot, path);
+            Platform.runLater(() -> {
+                attachments.addFolder(path, summary);
+                insert.run();
+            });
+        });
     }
 
     private void attachFile(Path path, String token) {

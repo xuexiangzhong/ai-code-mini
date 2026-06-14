@@ -214,7 +214,7 @@ class SafetyTest {
         @Test
         void readClaudeMd(@TempDir Path tmp) throws IOException {
             Files.writeString(tmp.resolve("CLAUDE.md"), "# Project Config");
-            assertEquals("# Project Config", Safety.readProjectConfig(tmp.toString()));
+            assertTrue(Safety.readProjectConfig(tmp.toString()).contains("# Project Config"));
         }
 
         @Test
@@ -222,7 +222,7 @@ class SafetyTest {
             Path claudeDir = tmp.resolve(".claude");
             Files.createDirectories(claudeDir);
             Files.writeString(claudeDir.resolve("CLAUDE.md"), "# Nested Config");
-            assertEquals("# Nested Config", Safety.readProjectConfig(tmp.toString()));
+            assertTrue(Safety.readProjectConfig(tmp.toString()).contains("# Nested Config"));
         }
 
         @Test
@@ -231,7 +231,9 @@ class SafetyTest {
             Path claudeDir = tmp.resolve(".claude");
             Files.createDirectories(claudeDir);
             Files.writeString(claudeDir.resolve("CLAUDE.md"), "# Nested");
-            assertEquals("# Root", Safety.readProjectConfig(tmp.toString()));
+            String config = Safety.readProjectConfig(tmp.toString());
+            assertTrue(config.contains("# Root"));
+            assertTrue(config.contains("# Nested"));
         }
 
         @Test

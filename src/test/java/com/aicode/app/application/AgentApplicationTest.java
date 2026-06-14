@@ -16,10 +16,16 @@ class AgentApplicationTest {
         AppConfig config = testConfig();
         AgentApplication app = new AgentApplication(config);
 
-        assertFalse(app.tools().isEmpty());
+        assertEquals(15, app.tools().size());
+        assertTrue(app.tools().stream().anyMatch(t -> "semantic_search".equals(t.name())));
+        assertTrue(app.tools().stream().anyMatch(t -> "search_replace".equals(t.name())));
+        assertTrue(app.tools().stream().anyMatch(t -> "list_dir".equals(t.name())));
+        assertTrue(app.tools().stream().anyMatch(t -> "delete_file".equals(t.name())));
         assertNotNull(app.provider());
         assertFalse(app.systemPrompt().isBlank());
         assertFalse(app.chatSystemPrompt().isBlank());
+        assertTrue(app.systemPrompt().contains("Tool Strategy"));
+        assertTrue(app.chatSystemPrompt().contains("@ attachments"));
         assertTrue(app.chatOptions().tools().isEmpty());
         ApprovalGate gate = new ApprovalGate(AgentEventListener.NOOP);
         assertNotNull(app.createToolExecutor(gate, AgentEventListener.NOOP));

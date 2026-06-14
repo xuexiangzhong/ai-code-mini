@@ -1,5 +1,6 @@
 package com.aicode.agent;
 
+import com.aicode.app.config.AppConfig;
 import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.Tool;
@@ -122,7 +123,7 @@ class TokenCounterTest {
 
         @Test
         void unknownModel() {
-            assertNull(TokenCounter.getModelContextLimit("unknown-model"));
+            assertEquals(AppConfig.defaultContextWindow(), TokenCounter.getModelContextLimit("unknown-model"));
         }
     }
 

@@ -54,6 +54,14 @@ public final class WorkspaceContext {
         conversations.add(conversation);
     }
 
+    void removeConversation(ConversationContext conversation) {
+        conversations.remove(conversation);
+    }
+
+    void clearConversations() {
+        conversations.clear();
+    }
+
     AgentApplication application() {
         return application;
     }

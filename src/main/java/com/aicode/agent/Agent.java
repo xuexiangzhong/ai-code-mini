@@ -71,7 +71,8 @@ public final class Agent {
             List<ToolCallRecord> toolCalls,
             int iterations,
             int inputTokens,
-            int outputTokens
+            int outputTokens,
+            List<Message> appendedMessages
     ) {}
 
     private Agent() {}
@@ -84,7 +85,9 @@ public final class Agent {
         List<ToolCallRecord> toolCalls = new ArrayList<>();
         int[] totalInput = {0};
         int[] totalOutput = {0};
-        return runIteration(config, new ArrayList<>(messages), toolCalls, totalInput, totalOutput, 0, null, 0);
+        List<Message> working = new ArrayList<>(messages);
+        int baseSize = working.size();
+        return runIteration(config, working, toolCalls, totalInput, totalOutput, 0, null, 0, baseSize);
     }
 
     public static CompletableFuture<AgentResult> runAgentStream(
@@ -96,7 +99,9 @@ public final class Agent {
         int[] totalInput = {0};
         int[] totalOutput = {0};
         AgentEventListener events = listener != null ? listener : AgentEventListener.NOOP;
-        return runIteration(config, new ArrayList<>(messages), toolCalls, totalInput, totalOutput, 0, events, 0);
+        List<Message> working = new ArrayList<>(messages);
+        int baseSize = working.size();
+        return runIteration(config, working, toolCalls, totalInput, totalOutput, 0, events, 0, baseSize);
     }
 
     private static CompletableFuture<AgentResult> runIteration(
@@ -107,20 +112,23 @@ public final class Agent {
             int[] totalOutput,
             int iteration,
             AgentEventListener listener,
-            int outputRetryAttempt
+            int outputRetryAttempt,
+            int baseSize
     ) {
         if (isCancelled(config)) {
-            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener);
+            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
         }
 
         if (iteration >= config.maxIterations()) {
             emitDone(listener, config.maxIterations(), totalInput[0], totalOutput[0]);
-            return CompletableFuture.completedFuture(new AgentResult(
+            return CompletableFuture.completedFuture(result(
                     "(max iterations reached)",
-                    List.copyOf(toolCalls),
+                    toolCalls,
                     config.maxIterations(),
                     totalInput[0],
-                    totalOutput[0]
+                    totalOutput[0],
+                    messages,
+                    baseSize
             ));
         }
 
@@ -135,14 +143,14 @@ public final class Agent {
         if (listener != null) {
             return streamChat(
                     config, messages, options, toolCalls, totalInput, totalOutput,
-                    iteration, listener, outputRetryAttempt
+                    iteration, listener, outputRetryAttempt, baseSize
             );
         }
 
         return config.provider().chat(messages, options).thenCompose(response ->
                 handleResponse(
                         config, messages, toolCalls, totalInput, totalOutput,
-                        iteration, listener, response, outputRetryAttempt, options
+                        iteration, listener, response, outputRetryAttempt, options, baseSize
                 ));
     }
 
@@ -155,7 +163,8 @@ public final class Agent {
             int[] totalOutput,
             int iteration,
             AgentEventListener listener,
-            int outputRetryAttempt
+            int outputRetryAttempt,
+            int baseSize
     ) {
         return CompletableFuture.supplyAsync(() -> {
             StringBuilder accumulated = new StringBuilder();
@@ -207,7 +216,7 @@ public final class Agent {
                 ));
                 return runIteration(
                         config, messages, toolCalls, totalInput, totalOutput,
-                        iteration, listener, outputRetryAttempt + 1
+                        iteration, listener, outputRetryAttempt + 1, baseSize
                 );
             }
             String text = response.text() != null && !response.text().isBlank()
@@ -219,13 +228,13 @@ public final class Agent {
             }
             return handleResponse(
                     config, messages, toolCalls, totalInput, totalOutput,
-                    iteration, listener, response, outputRetryAttempt, options
+                    iteration, listener, response, outputRetryAttempt, options, baseSize
             );
         }).exceptionallyCompose(error -> {
             RunCancelledException cancelled = findCancelled(error);
             if (cancelled != null) {
                 return cancelledFuture(
-                        config, toolCalls, totalInput[0], totalOutput[0], iteration, listener
+                        config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
                 );
             }
             if (error instanceof RuntimeException runtime) {
@@ -249,7 +258,8 @@ public final class Agent {
             AgentEventListener listener,
             ChatResponse response,
             int outputRetryAttempt,
-            ChatOptions options
+            ChatOptions options,
+            int baseSize
     ) {
         if (shouldRetryOutput(config, response, outputRetryAttempt)) {
             int currentLimit = config.outputLimits().limitForAttempt(outputRetryAttempt);
@@ -263,7 +273,7 @@ public final class Agent {
             }
             return runIteration(
                     config, messages, toolCalls, totalInput, totalOutput,
-                    iteration, listener, outputRetryAttempt + 1
+                    iteration, listener, outputRetryAttempt + 1, baseSize
             );
         }
 
@@ -287,17 +297,19 @@ public final class Agent {
                 }
             }
             emitDone(listener, iteration + 1, totalInput[0], totalOutput[0]);
-            return CompletableFuture.completedFuture(new AgentResult(
+            return CompletableFuture.completedFuture(result(
                     text,
-                    List.copyOf(toolCalls),
+                    toolCalls,
                     iteration + 1,
                     totalInput[0],
-                    totalOutput[0]
+                    totalOutput[0],
+                    messages,
+                    baseSize
             ));
         }
 
         if (isCancelled(config)) {
-            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener);
+            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
         }
 
         List<ToolUseBlock> uses = LLMHelpers.extractToolUses(response.content());
@@ -308,7 +320,7 @@ public final class Agent {
             List<CompletableFuture<String>> resultFutures = new ArrayList<>();
             for (ToolUseBlock use : uses) {
                 if (isCancelled(config)) {
-                    return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener);
+                    return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
                 }
                 resultFutures.add(config.executeTool().execute(use.name(), use.input()));
             }
@@ -349,7 +361,7 @@ public final class Agent {
                     RunCancelledException cancelled = findCancelled(error);
                     if (cancelled != null) {
                         return cancelledFuture(
-                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener
+                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
                         ).thenApply(r -> List.<ContentBlock>of());
                     }
                     if (error instanceof RuntimeException runtime) {
@@ -360,13 +372,13 @@ public final class Agent {
                 .thenCompose(results -> {
                     if (isCancelled(config)) {
                         return cancelledFuture(
-                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener
+                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
                         );
                     }
                     messages.add(Message.userBlocks(results));
                     return runIteration(
                             config, messages, toolCalls, totalInput, totalOutput,
-                            iteration + 1, listener, 0
+                            iteration + 1, listener, 0, baseSize
                     );
                 });
     }
@@ -402,20 +414,46 @@ public final class Agent {
             int totalInput,
             int totalOutput,
             int iteration,
-            AgentEventListener listener
+            AgentEventListener listener,
+            List<Message> messages,
+            int baseSize
     ) {
         String partial = partialText(config);
         if (listener != null) {
             listener.onEvent(new AgentEvent.Cancelled(partial));
             emitDone(listener, iteration, totalInput, totalOutput);
         }
-        return CompletableFuture.completedFuture(new AgentResult(
+        return CompletableFuture.completedFuture(result(
                 partial,
-                List.copyOf(toolCalls),
+                toolCalls,
                 iteration,
                 totalInput,
-                totalOutput
+                totalOutput,
+                messages,
+                baseSize
         ));
+    }
+
+    private static AgentResult result(
+            String text,
+            List<ToolCallRecord> toolCalls,
+            int iterations,
+            int inputTokens,
+            int outputTokens,
+            List<Message> messages,
+            int baseSize
+    ) {
+        List<Message> appended = messages.size() <= baseSize
+                ? List.of()
+                : List.copyOf(messages.subList(baseSize, messages.size()));
+        return new AgentResult(
+                text,
+                List.copyOf(toolCalls),
+                iterations,
+                inputTokens,
+                outputTokens,
+                appended
+        );
     }
 
     private static boolean shouldRetryOutput(

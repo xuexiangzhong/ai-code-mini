@@ -1,5 +1,8 @@
 package com.aicode.app.ui;
 
+import com.aicode.agent.ContextSanitizer;
+import com.aicode.agent.tools.CodebaseSearch;
+import com.aicode.agent.tools.ListDirTool;
 import com.aicode.app.config.WorkingDirectory;
 
 import java.nio.file.Path;
@@ -7,11 +10,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Chat context attachments (@ file / @ selection). */
+/** Chat context attachments (@ file / @ folder / @ selection / @ codebase). */
 public final class ChatContextAttachments {
     public sealed interface Attachment {
         record File(Path path, String content) implements Attachment {}
+        record Folder(Path path, String summary) implements Attachment {}
         record Selection(Path path, String text) implements Attachment {}
+        record Codebase() implements Attachment {}
     }
 
     private final List<Attachment> items = new ArrayList<>();
@@ -29,6 +34,16 @@ public final class ChatContextAttachments {
         items.add(new Attachment.File(path, content));
     }
 
+    public void addFolder(Path path, String summary) {
+        items.removeIf(a -> a instanceof Attachment.Folder f && f.path().equals(path));
+        items.add(new Attachment.Folder(path, summary));
+    }
+
+    public void addCodebase() {
+        items.removeIf(a -> a instanceof Attachment.Codebase);
+        items.add(new Attachment.Codebase());
+    }
+
     public void addSelection(Path path, String text) {
         if (text == null || text.isBlank()) {
             return;
@@ -37,8 +52,32 @@ public final class ChatContextAttachments {
         items.add(new Attachment.Selection(path, text.strip()));
     }
 
+    public boolean hasCodebase() {
+        return items.stream().anyMatch(a -> a instanceof Attachment.Codebase);
+    }
+
     public boolean isEmpty() {
         return items.isEmpty();
+    }
+
+    /** Build user message payload including @ context and optional @Codebase search. */
+    public String buildFullPrompt(String userText, Path workspace) {
+        StringBuilder sb = new StringBuilder();
+        if (hasCodebase() && userText != null && !userText.isBlank()) {
+            CodebaseSearch.Result result = CodebaseSearch.search(workspace, userText, 8, null, null);
+            String search = CodebaseSearch.formatResults(result);
+            sb.append("[@Codebase 检索]\n")
+                    .append(ContextSanitizer.wrapUntrusted(
+                            "codebase_search",
+                            truncate(search, 16_000)
+                    ))
+                    .append("\n\n");
+        }
+        sb.append(buildPromptPrefix());
+        if (userText != null && !userText.isBlank()) {
+            sb.append(userText);
+        }
+        return sb.toString();
     }
 
     public String buildPromptPrefix() {
@@ -50,14 +89,29 @@ public final class ChatContextAttachments {
             switch (item) {
                 case Attachment.File file -> sb.append("[@文件: ")
                         .append(file.path())
-                        .append("]\n```\n")
-                        .append(truncate(file.content(), 12000))
-                        .append("\n```\n\n");
+                        .append("]\n")
+                        .append(ContextSanitizer.wrapUntrusted(
+                                file.path().toString(),
+                                truncate(file.content(), 12_000)
+                        ))
+                        .append("\n\n");
+                case Attachment.Folder folder -> sb.append("[@文件夹: ")
+                        .append(folder.path())
+                        .append("]\n")
+                        .append(ContextSanitizer.wrapUntrusted(
+                                folder.path().toString(),
+                                truncate(folder.summary(), 10_000)
+                        ))
+                        .append("\n\n");
                 case Attachment.Selection sel -> sb.append("[@选中代码: ")
                         .append(sel.path() != null ? sel.path() : "editor")
-                        .append("]\n```\n")
-                        .append(sel.text())
-                        .append("\n```\n\n");
+                        .append("]\n")
+                        .append(ContextSanitizer.wrapUntrusted(
+                                sel.path() != null ? sel.path().toString() : "selection",
+                                sel.text()
+                        ))
+                        .append("\n\n");
+                case Attachment.Codebase ignored -> { /* resolved in buildFullPrompt */ }
             }
         }
         return sb.toString();
@@ -72,12 +126,21 @@ public final class ChatContextAttachments {
             switch (item) {
                 case Attachment.File file ->
                         parts.add("@" + WorkingDirectory.displayName(file.path()));
+                case Attachment.Folder folder ->
+                        parts.add("@文件夹(" + WorkingDirectory.displayName(folder.path()) + ")");
                 case Attachment.Selection sel ->
                         parts.add("@选中(" + (sel.path() != null
                                 ? WorkingDirectory.displayName(sel.path()) : "editor") + ")");
+                case Attachment.Codebase ignored -> parts.add("@Codebase");
             }
         }
         return String.join("  ", parts);
+    }
+
+    public static String summarizeFolder(Path workspace, Path folder) {
+        Path rel = workspace.toAbsolutePath().normalize().relativize(folder.toAbsolutePath().normalize());
+        String pathArg = rel.toString().isEmpty() ? "." : rel.toString().replace('\\', '/');
+        return ListDirTool.execute(new ListDirTool.Input(pathArg, 2));
     }
 
     private static String truncate(String text, int max) {

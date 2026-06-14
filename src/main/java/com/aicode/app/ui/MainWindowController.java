@@ -33,6 +33,7 @@ public final class MainWindowController {
     private final WindowManager windowManager;
     private final Path initialWorkspace;
     private final String initialModelId;
+    private DiffReviewPanel diffReviewPanel;
     private AgentSessionBinder binder;
 
     @FXML private TextField workspaceField;
@@ -100,6 +101,10 @@ public final class MainWindowController {
         VBox.setVgrow(chatView, Priority.ALWAYS);
         chatMessagesHost.getChildren().add(chatView);
 
+        diffReviewPanel = new DiffReviewPanel();
+        diffReviewPanel.setOnFileChanged(this::reloadEditedFile);
+        chatMessagesHost.getChildren().add(0, diffReviewPanel);
+
         composerInput = createComposerInput(workspaceRoot);
         HBox.setHgrow(composerInput.node(), Priority.ALWAYS);
         chatInputHost.getChildren().add(composerInput);
@@ -117,6 +122,7 @@ public final class MainWindowController {
                 statusLabel,
                 () -> appendChat("请先在「模型配置」主界面添加模型并填写 API Key。\n\n")
         );
+        binder.setDiffReviewPanel(diffReviewPanel);
         binder.setToolLogConsumer(terminalPane::appendToolLog);
         binder.bindConversations(conversationList, newConversationButton);
         binder.initializeModes();
@@ -215,8 +221,8 @@ public final class MainWindowController {
             binder.appendSystemLine("无效的工作空间目录: " + path);
             return;
         }
-        workspaceRoot = path;
-        workspaceField.setText(path.toString());
+        workspaceRoot = WorkingDirectory.normalizeWorkspace(path);
+        workspaceField.setText(workspaceRoot.toString());
         fileTreeRefresher.setWorkspace(workspaceRoot);
         loadFileTreeAsync(workspaceRoot);
         statusLabel.setText("Workspace: " + workspaceRoot);
@@ -256,6 +262,24 @@ public final class MainWindowController {
                         java.util.List.of(workspaceRoot.toString(), System.getProperty("java.io.tmpdir"))
                 )
         );
+    }
+
+    private void reloadEditedFile(Path path) {
+        if (path == null || editorTabs == null) {
+            return;
+        }
+        Thread.ofVirtual().name("reload-edited-file").start(() -> {
+            try {
+                if (!Files.isRegularFile(path)) {
+                    Platform.runLater(() -> editorTabs.closeFile(path));
+                    return;
+                }
+                String content = Files.readString(path);
+                Platform.runLater(() -> editorTabs.reloadFile(path, content));
+            } catch (IOException ignored) {
+                // ignore reload errors
+            }
+        });
     }
 
     void appendChat(String text) {

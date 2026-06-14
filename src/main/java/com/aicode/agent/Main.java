@@ -3,11 +3,15 @@ package com.aicode.agent;
 import com.aicode.agent.llm.OutputTokenLimits;
 import com.aicode.agent.llm.ProviderFactory;
 import com.aicode.agent.llm.Tool;
+import com.aicode.agent.PromptFactory;
 import com.aicode.agent.tools.BashTool;
-import com.aicode.agent.tools.ShellRunner;
+import com.aicode.agent.tools.DeleteTool;
 import com.aicode.agent.tools.GlobTool;
 import com.aicode.agent.tools.GrepTool;
+import com.aicode.agent.tools.ListDirTool;
 import com.aicode.agent.tools.ReadTool;
+import com.aicode.agent.tools.SearchReplaceTool;
+import com.aicode.agent.tools.SemanticSearchTool;
 import com.aicode.agent.tools.WriteTool;
 
 import java.util.ArrayList;
@@ -15,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -64,9 +69,13 @@ public final class Main {
         List<Tool> allTools = new ArrayList<>();
         allTools.add(ReadTool.DEFINITION);
         allTools.add(WriteTool.DEFINITION);
+        allTools.add(SearchReplaceTool.DEFINITION);
+        allTools.add(DeleteTool.DEFINITION);
         allTools.add(BashTool.DEFINITION);
         allTools.add(GlobTool.DEFINITION);
         allTools.add(GrepTool.DEFINITION);
+        allTools.add(ListDirTool.DEFINITION);
+        allTools.add(SemanticSearchTool.DEFINITION);
         allTools.addAll(TaskManager.TASK_TOOLS);
         allTools.addAll(Context.SCRATCHPAD_TOOLS);
 
@@ -87,9 +96,18 @@ public final class Main {
                 );
             }
 
-            if ("read_file".equals(name) || "write_file".equals(name)) {
+            if ("read_file".equals(name) || "write_file".equals(name) || "search_replace".equals(name)
+                    || "delete_file".equals(name)) {
                 String filePath = String.valueOf(input.getOrDefault("file_path", ""));
                 String blocked = sandbox.check(filePath);
+                if (blocked != null) {
+                    return CompletableFuture.completedFuture(blocked);
+                }
+            }
+
+            if ("glob".equals(name) || "grep".equals(name) || "list_dir".equals(name)) {
+                String path = String.valueOf(input.getOrDefault("path", "."));
+                String blocked = sandbox.check(path);
                 if (blocked != null) {
                     return CompletableFuture.completedFuture(blocked);
                 }
@@ -113,9 +131,14 @@ public final class Main {
                 String result = switch (name) {
                     case "read_file" -> ReadTool.execute(ReadTool.Input.fromMap(input));
                     case "write_file" -> WriteTool.execute(WriteTool.Input.fromMap(input));
+                    case "search_replace" -> SearchReplaceTool.execute(SearchReplaceTool.Input.fromMap(input));
+                    case "delete_file" -> DeleteTool.execute(DeleteTool.Input.fromMap(input));
                     case "bash" -> BashTool.execute(BashTool.Input.fromMap(input)).join();
                     case "glob" -> GlobTool.execute(GlobTool.Input.fromMap(input));
                     case "grep" -> GrepTool.execute(GrepTool.Input.fromMap(input));
+                    case "list_dir" -> ListDirTool.execute(ListDirTool.Input.fromMap(input));
+                    case "semantic_search" -> SemanticSearchTool.execute(
+                            SemanticSearchTool.Input.fromMap(input), Path.of(projectDir));
                     default -> "Error: unknown tool \"" + name + "\"";
                 };
                 double ms = (System.nanoTime() - start) / 1_000_000.0;
@@ -133,30 +156,7 @@ public final class Main {
         }
         Agent.ToolExecutor executeTool = Errors.safeToolExecutor(rawExecutor, knownTools);
 
-        String projectConfig = Safety.readProjectConfig(projectDir);
-        SystemPromptBuilder promptBuilder = new SystemPromptBuilder()
-                .setRole(
-                        "You are a coding assistant. Help the user with software engineering tasks "
-                                + "by reading files, writing code, and running commands. Be concise and accurate."
-                )
-                .addRules(List.of(
-                        "Always read a file before modifying it.",
-                        "Explain what you are about to do before using tools.",
-                        "If a task is complex, break it into steps using task tools.",
-                        "Never execute destructive commands without confirmation.",
-                        "Use the scratchpad to track your plan and findings.",
-                        "Shell commands run via " + ShellRunner.activeShellDescription()
-                                + ". Use syntax compatible with the active shell."
-                ))
-                .addToolGuide(allTools)
-                .setOutputConstraints(
-                        "Respond in the user's language. Use markdown for code blocks. Keep explanations brief."
-                );
-
-        if (projectConfig != null) {
-            promptBuilder.addSection("Project Instructions", projectConfig, 90);
-        }
-        String systemPrompt = promptBuilder.build();
+        String systemPrompt = PromptFactory.buildAgentPrompt(Path.of(projectDir), allTools);
 
         showBanner(agentName, agentIcon, model, projectDir);
 

@@ -97,19 +97,10 @@ public final class Safety {
         return null;
     }
 
+    /** @deprecated use {@link ProjectContext#loadForPrompt(java.nio.file.Path)} */
+    @Deprecated
     public static String readProjectConfig(String projectDir) {
-        List<String> candidates = List.of("CLAUDE.md", ".claude/CLAUDE.md");
-        for (String candidate : candidates) {
-            Path filePath = Path.of(projectDir, candidate);
-            try {
-                if (java.nio.file.Files.isRegularFile(filePath)) {
-                    return java.nio.file.Files.readString(filePath);
-                }
-            } catch (java.io.IOException ignored) {
-                // try next candidate
-            }
-        }
-        return null;
+        return ProjectContext.loadForPrompt(Path.of(projectDir));
     }
 
     public record GitInfo(String branch, String lastCommit, String status, String remoteUrl) {}

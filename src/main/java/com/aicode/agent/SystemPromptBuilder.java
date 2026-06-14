@@ -2,6 +2,7 @@ package com.aicode.agent;
 
 import com.aicode.agent.llm.Tool;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -78,22 +79,6 @@ public class SystemPromptBuilder {
     }
 
     public static String createCodingAssistantPrompt(List<Tool> tools) {
-        return new SystemPromptBuilder()
-                .setRole(
-                        "You are a coding assistant. Help the user with software engineering tasks "
-                                + "by reading files, writing code, and running commands. Be concise and accurate."
-                )
-                .addRules(List.of(
-                        "Always read a file before modifying it.",
-                        "Explain what you are about to do before using tools.",
-                        "If a task is complex, break it into steps and track progress with task tools.",
-                        "Never execute destructive commands without confirmation."
-                ))
-                .addToolGuide(tools)
-                .setOutputConstraints(
-                        "Respond in the user's language. Use markdown for code blocks. "
-                                + "Keep explanations brief and focused."
-                )
-                .build();
+        return PromptFactory.buildAgentPrompt(Path.of(System.getProperty("user.dir")), tools);
     }
 }

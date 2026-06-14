@@ -26,6 +26,7 @@ public final class AgentSidebarNav {
     private Consumer<WorkspaceContext> onSelectWorkspace;
     private BiConsumer<WorkspaceContext, ConversationContext> onSelectConversation;
     private Consumer<WorkspaceContext> onAddConversation;
+    private BiConsumer<WorkspaceContext, ConversationContext> onCloseConversation;
     private Runnable onAddWorkspace;
 
     private List<WorkspaceContext> workspaces = List.of();
@@ -59,6 +60,10 @@ public final class AgentSidebarNav {
 
     public void setOnAddConversation(Consumer<WorkspaceContext> onAddConversation) {
         this.onAddConversation = onAddConversation;
+    }
+
+    public void setOnCloseConversation(BiConsumer<WorkspaceContext, ConversationContext> onCloseConversation) {
+        this.onCloseConversation = onCloseConversation;
     }
 
     public void render(
@@ -168,8 +173,23 @@ public final class AgentSidebarNav {
         Label label = new Label(title);
         label.getStyleClass().add("agent-ws-session-title");
 
-        row.getChildren().addAll(bullet, label);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Button close = new Button("×");
+        close.getStyleClass().add("agent-ws-session-close");
+        close.setOnAction(e -> {
+            e.consume();
+            if (onCloseConversation != null) {
+                onCloseConversation.accept(workspace, conversation);
+            }
+        });
+
+        row.getChildren().addAll(bullet, label, spacer, close);
         row.setOnMouseClicked(e -> {
+            if (e.getTarget() == close) {
+                return;
+            }
             if (onSelectConversation != null) {
                 onSelectConversation.accept(workspace, conversation);
             }

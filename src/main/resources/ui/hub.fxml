@@ -12,7 +12,10 @@
             <padding><Insets top="20" right="24" bottom="12" left="24"/></padding>
             <Label text="AiCode" styleClass="hub-brand"/>
             <Label text="配置模型，选择打开方式" styleClass="config-hint"/>
-            <Label fx:id="configPathLabel" wrapText="true" styleClass="config-hint"/>
+            <HBox spacing="8" alignment="CENTER_LEFT">
+                <Label fx:id="configPathLabel" wrapText="true" styleClass="config-hint" HBox.hgrow="ALWAYS"/>
+                <Button fx:id="openConfigFolderButton" text="打开配置目录" styleClass="ghost-button"/>
+            </HBox>
         </VBox>
     </top>
     <center>

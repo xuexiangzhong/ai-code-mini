@@ -1,5 +1,6 @@
 package com.aicode.app.ui;
 
+import com.aicode.agent.TurnContext;
 import com.aicode.app.application.AgentApplication;
 import com.aicode.app.config.AppConfig;
 import com.aicode.app.config.ModelProfile;
@@ -90,6 +91,7 @@ public final class AgentWindowSessionManager {
             }
             createConversationIn(workspace);
         });
+        nav.setOnCloseConversation(this::closeConversation);
     }
 
     private void refreshSidebarNav() {
@@ -109,6 +111,28 @@ public final class AgentWindowSessionManager {
                 sendMessage();
             }
         });
+        sendButton.sceneProperty().addListener((obs, old, scene) -> {
+            if (scene == null) {
+                return;
+            }
+            javafx.stage.Window window = scene.getWindow();
+            if (window instanceof Stage stage) {
+                stage.addEventHandler(javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST, event -> flushActiveSessions());
+            }
+        });
+        chatView.setOnLoadOlder(() -> {
+            if (activeConversation != null && activeWorkspace != null) {
+                loadOlderTurns(activeConversation);
+            }
+        });
+    }
+
+    private void flushActiveSessions() {
+        for (WorkspaceContext workspace : workspaces) {
+            if (workspace.sessionService() != null) {
+                workspace.sessionService().flushAllSessions();
+            }
+        }
     }
 
     private void handleSendOrStop() {
@@ -139,7 +163,7 @@ public final class AgentWindowSessionManager {
         workspaces.add(workspace);
         refreshSidebarNav();
         initWorkspaceService(workspace);
-        createConversationIn(workspace);
+        restoreOrCreateConversations(workspace);
         selectWorkspace(workspace);
     }
 
@@ -149,8 +173,15 @@ public final class AgentWindowSessionManager {
             initWorkspaceService(workspace);
         }
         for (WorkspaceContext workspace : workspaces) {
-            if (workspace.isReady() && workspace.conversations().isEmpty()) {
-                createConversationIn(workspace);
+            if (workspace.isReady() && shouldRestoreFromDisk(workspace)) {
+                workspace.clearConversations();
+                restoreOrCreateConversations(workspace);
+            } else if (workspace.isReady()) {
+                for (ConversationContext conversation : workspace.conversations()) {
+                    if (conversation == activeConversation) {
+                        presentConversationFromDisk(workspace, conversation);
+                    }
+                }
             }
         }
         if (activeWorkspace != null) {
@@ -192,24 +223,30 @@ public final class AgentWindowSessionManager {
         workspaces.add(workspace);
         refreshSidebarNav();
         initWorkspaceService(workspace);
-        createConversationIn(workspace);
+        restoreOrCreateConversations(workspace);
         selectWorkspace(workspace);
     }
 
     private void initWorkspaceService(WorkspaceContext workspace) {
         if (activeModel == null || !activeModel.isUsable()) {
+            flushWorkspaceSessions(workspace);
             workspace.setApplication(null);
             workspace.setSessionService(null);
             return;
         }
         try {
+            AgentSessionService previousService = workspace.sessionService();
+            if (previousService != null) {
+                previousService.flushAllSessions();
+            }
             AppConfig config = activeModel.toAppConfig(workspace.path());
             AgentApplication application = new AgentApplication(config);
             AgentSessionService sessionService = new AgentSessionService(application, false);
             workspace.setApplication(application);
             workspace.setSessionService(sessionService);
-            rebindWorkspaceConversations(workspace);
+            rebindWorkspaceConversations(workspace, previousService);
         } catch (RuntimeException e) {
+            flushWorkspaceSessions(workspace);
             workspace.setApplication(null);
             workspace.setSessionService(null);
             if (workspace == activeWorkspace) {
@@ -218,13 +255,26 @@ public final class AgentWindowSessionManager {
         }
     }
 
-    private void rebindWorkspaceConversations(WorkspaceContext workspace) {
+    private void flushWorkspaceSessions(WorkspaceContext workspace) {
+        AgentSessionService service = workspace.sessionService();
+        if (service != null) {
+            service.flushAllSessions();
+        }
+    }
+
+    private void rebindWorkspaceConversations(WorkspaceContext workspace, AgentSessionService previousService) {
         AgentSessionService sessionService = workspace.sessionService();
         if (sessionService == null) {
             return;
         }
         for (ConversationContext conversation : workspace.conversations()) {
-            AgentSession session = sessionService.createSession(workspace.path());
+            AgentSession session = sessionService.migrateSession(
+                    conversation.sessionId(),
+                    workspace.path(),
+                    previousService,
+                    conversation.transcript(),
+                    conversation.title()
+            );
             conversation.rebindSession(session.sessionId(), buildBridge(conversation));
         }
     }
@@ -233,7 +283,12 @@ public final class AgentWindowSessionManager {
         activeWorkspace = workspace;
         footerLabel.setText(workspace.path().toString());
         if (workspace.conversations().isEmpty()) {
-            createConversationIn(workspace);
+            if (workspace.isReady()) {
+                restoreOrCreateConversations(workspace);
+            }
+            if (workspace.conversations().isEmpty()) {
+                createConversationIn(workspace);
+            }
         } else if (activeConversation == null
                 || !workspace.conversations().contains(activeConversation)) {
             switchConversation(workspace.conversations().getFirst());
@@ -245,6 +300,46 @@ public final class AgentWindowSessionManager {
         updateInputState();
     }
 
+    private void restoreOrCreateConversations(WorkspaceContext workspace) {
+        AgentSessionService service = workspace.sessionService();
+        if (service == null || !workspace.conversations().isEmpty()) {
+            return;
+        }
+        List<com.aicode.app.session.SessionPersistence.StoredSession> stored =
+                service.loadStoredSessions(workspace.path());
+        if (stored.isEmpty()) {
+            createConversationIn(workspace);
+            return;
+        }
+        for (com.aicode.app.session.SessionPersistence.StoredSession saved : stored) {
+            com.aicode.app.session.AgentSession session = service.restoreSession(saved);
+            ConversationContext conversation = new ConversationContext(session.sessionId(), saved.title());
+            conversation.setBridge(buildBridge(conversation));
+            loadRecentTranscript(workspace, conversation);
+            workspace.addConversation(conversation);
+        }
+    }
+
+    private void closeConversation(WorkspaceContext workspace, ConversationContext conversation) {
+        if (workspace.sessionService() == null) {
+            return;
+        }
+        workspace.sessionService().closeSession(conversation.sessionId());
+        workspace.removeConversation(conversation);
+        if (activeConversation == conversation) {
+            streamingChat.resetPending();
+            activeConversation = null;
+            chatView.clear();
+            if (!workspace.conversations().isEmpty()) {
+                switchConversation(workspace.conversations().getFirst());
+            } else if (workspace == activeWorkspace) {
+                createConversationIn(workspace);
+            }
+        }
+        refreshSidebarNav();
+        updateInputState();
+    }
+
     private void createConversationIn(WorkspaceContext workspace) {
         if (workspace.sessionService() == null) {
             return;
@@ -252,6 +347,7 @@ public final class AgentWindowSessionManager {
         int count = workspace.conversations().size() + 1;
         String title = "新对话 " + count;
         AgentSession session = workspace.sessionService().createSession(workspace.path());
+        workspace.sessionService().setSessionTitle(session.sessionId(), title);
         ConversationContext conversation = new ConversationContext(session.sessionId(), title);
         conversation.setBridge(buildBridge(conversation));
         workspace.addConversation(conversation);
@@ -273,13 +369,74 @@ public final class AgentWindowSessionManager {
     private void switchConversation(ConversationContext conversation) {
         streamingChat.resetPending();
         activeConversation = conversation;
-        chatView.loadTurns(conversation.transcript().turns());
+        if (activeWorkspace != null) {
+            presentConversationFromDisk(activeWorkspace, conversation);
+        }
         threadTitleLabel.setText(conversation.generating() ? "生成中..." : conversation.title());
         refreshSidebarNav();
         if (activeWorkspace != null) {
             notifyWorkspaceActivated(activeWorkspace.path());
         }
         updateInputState();
+    }
+
+    private void presentConversationFromDisk(WorkspaceContext workspace, ConversationContext conversation) {
+        if (workspace.sessionService() == null) {
+            chatView.clear();
+            return;
+        }
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        com.aicode.app.session.SessionPersistence.HistoryPage page =
+                com.aicode.app.session.ConversationTranscriptLoader.loadRecentPage(
+                        conversation.transcript(),
+                        workspace.sessionService(),
+                        workspace.path(),
+                        conversation.sessionId(),
+                        mode
+                );
+        conversation.setTranscriptPagination(page.startIndex(), page.totalTurns());
+        chatView.loadTurns(conversation.transcript().turns());
+        chatView.setHasOlderTurns(page.hasOlder());
+    }
+
+    private void loadRecentTranscript(WorkspaceContext workspace, ConversationContext conversation) {
+        if (workspace.sessionService() == null) {
+            return;
+        }
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        com.aicode.app.session.SessionPersistence.HistoryPage page =
+                com.aicode.app.session.ConversationTranscriptLoader.loadRecentPage(
+                        conversation.transcript(),
+                        workspace.sessionService(),
+                        workspace.path(),
+                        conversation.sessionId(),
+                        mode
+                );
+        conversation.setTranscriptPagination(page.startIndex(), page.totalTurns());
+    }
+
+    private void loadOlderTurns(ConversationContext conversation) {
+        if (activeWorkspace == null || activeWorkspace.sessionService() == null
+                || conversation.loadingOlderTurns() || !conversation.hasOlderTurns()) {
+            chatView.finishLoadingOlderTurns();
+            return;
+        }
+        conversation.setLoadingOlderTurns(true);
+        ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
+        com.aicode.app.session.SessionPersistence.HistoryPage page =
+                com.aicode.app.session.ConversationTranscriptLoader.loadOlderPage(
+                        conversation.transcript(),
+                        activeWorkspace.sessionService(),
+                        activeWorkspace.path(),
+                        conversation.sessionId(),
+                        mode,
+                        conversation.oldestLoadedTurnIndex()
+                );
+        conversation.setTranscriptPagination(page.startIndex(), page.totalTurns());
+        List<ChatTurn> prepended = conversation.transcript().turns().subList(0, page.turns().size());
+        chatView.prependTurns(prepended, page.hasOlder());
+        conversation.setLoadingOlderTurns(false);
+        chatView.finishLoadingOlderTurns();
     }
 
     private void notifyWorkspaceActivated(Path path) {
@@ -306,13 +463,17 @@ public final class AgentWindowSessionManager {
         if (onMessageSent != null) {
             onMessageSent.run();
         }
-        String contextPrefix = chatInput.attachments().buildPromptPrefix();
-        String payload = contextPrefix.isEmpty() ? text : contextPrefix + text;
+        String payload = chatInput.attachments().buildFullPrompt(text, activeWorkspace.path());
+        TurnContext turnContext = TurnContext.of(activeWorkspace.path(), chatInput.activeFile());
         ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
         ConversationContext sending = activeConversation;
         chatInput.clearAfterSend();
         maybeUpdateTitle(sending, text);
         appendUser(sending, text);
+        sending.setTranscriptPagination(
+                sending.oldestLoadedTurnIndex(),
+                sending.totalTurns() + 1
+        );
         streamingChat.beginStream();
         sending.setGenerating(true);
         setGeneratingUi(true);
@@ -320,10 +481,10 @@ public final class AgentWindowSessionManager {
 
         AgentSessionService sessionService = activeWorkspace.sessionService();
         if (mode == ChatMode.CHAT) {
-            sessionService.sendChatMessage(sending.sessionId(), payload, sending.bridge())
+            sessionService.sendChatMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         } else {
-            sessionService.sendAgentMessage(sending.sessionId(), payload, sending.bridge())
+            sessionService.sendAgentMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         }
     }
@@ -355,6 +516,9 @@ public final class AgentWindowSessionManager {
                 ? userMessage.substring(0, 28) + "…"
                 : userMessage;
         conversation.setTitle(shortTitle);
+        if (activeWorkspace != null && activeWorkspace.sessionService() != null) {
+            activeWorkspace.sessionService().setSessionTitle(conversation.sessionId(), shortTitle);
+        }
         refreshSidebarNav();
         if (conversation == activeConversation) {
             threadTitleLabel.setText(shortTitle);
@@ -368,6 +532,16 @@ public final class AgentWindowSessionManager {
         chatInput.setPromptText(mode == ChatMode.CHAT
                 ? "发送后续消息（问答模式）..."
                 : "发送后续消息...");
+        if (activeConversation != null && activeWorkspace != null) {
+            presentConversationFromDisk(activeWorkspace, activeConversation);
+        }
+    }
+
+    private boolean shouldRestoreFromDisk(WorkspaceContext workspace) {
+        if (workspace.conversations().isEmpty()) {
+            return !workspace.sessionService().loadStoredSessions(workspace.path()).isEmpty();
+        }
+        return false;
     }
 
     private void updateInputState() {
@@ -386,9 +560,10 @@ public final class AgentWindowSessionManager {
     }
 
     private void appendUser(ConversationContext conversation, String text) {
-        conversation.transcript().startTurn(text);
+        String createdAt = java.time.Instant.now().toString();
+        conversation.transcript().startTurn(text, createdAt);
         if (conversation == activeConversation) {
-            Platform.runLater(() -> chatView.startTurn(text));
+            Platform.runLater(() -> chatView.startTurn(text, createdAt));
         }
     }
 
