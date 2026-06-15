@@ -735,6 +735,14 @@
     -fx-spacing: 8;
 }
 
+.agents-template-preview {
+    -fx-control-inner-background: #141414;
+    -fx-background-color: #141414;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-family: "Menlo", "Consolas", monospace;
+    -fx-font-size: 12px;
+}
+
 /* ── Legacy button override (avoid magenta fill on all buttons) ── */
 .button {
     -fx-background-color: #2a2a2a;

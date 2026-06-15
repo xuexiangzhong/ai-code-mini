@@ -71,6 +71,35 @@
     function markClean() {
       dirty = false;
     }
+
+    function insertText(text) {
+      if (!editor || text == null) return;
+      var selection = editor.getSelection();
+      editor.executeEdits('paste', [{
+        range: selection,
+        text: text,
+        forceMoveMarkers: true
+      }]);
+    }
+
+    function deleteSelection() {
+      if (!editor) return;
+      var selection = editor.getSelection();
+      editor.executeEdits('cut', [{
+        range: selection,
+        text: '',
+        forceMoveMarkers: true
+      }]);
+    }
+
+    function selectAllText() {
+      if (!editor) return;
+      editor.setSelection(editor.getModel().getFullModelRange());
+    }
+
+    function focusEditor() {
+      if (editor) editor.focus();
+    }
   </script>
 </body>
 </html>

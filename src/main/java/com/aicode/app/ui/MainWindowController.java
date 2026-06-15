@@ -4,6 +4,7 @@ import com.aicode.app.application.WorkspaceGuard;
 import com.aicode.app.config.ModelProfile;
 import com.aicode.app.config.ModelRegistry;
 import com.aicode.app.config.WorkingDirectory;
+import com.aicode.app.ui.dialog.AgentsSetupPromptDialog;
 import com.aicode.app.ui.pane.EditorTabManager;
 import com.aicode.app.ui.pane.TerminalPane;
 import com.aicode.app.window.WindowManager;
@@ -222,6 +223,7 @@ public final class MainWindowController {
             return;
         }
         workspaceRoot = WorkingDirectory.normalizeWorkspace(path);
+        AgentsSetupPromptDialog.promptIfMissing((Stage) workspaceField.getScene().getWindow(), workspaceRoot);
         workspaceField.setText(workspaceRoot.toString());
         fileTreeRefresher.setWorkspace(workspaceRoot);
         loadFileTreeAsync(workspaceRoot);

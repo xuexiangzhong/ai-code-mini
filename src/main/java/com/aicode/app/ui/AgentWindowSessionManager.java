@@ -8,6 +8,7 @@ import com.aicode.app.event.AgentEvent;
 import com.aicode.app.session.AgentSession;
 import com.aicode.app.session.AgentSessionService;
 import com.aicode.app.session.ChatMode;
+import com.aicode.app.ui.dialog.AgentsSetupPromptDialog;
 import com.aicode.app.ui.dialog.ApprovalDialog;
 import javafx.application.Platform;
 import javafx.scene.control.Button;
@@ -211,6 +212,7 @@ public final class AgentWindowSessionManager {
             return;
         }
         Path normalized = com.aicode.app.config.WorkingDirectory.normalizeWorkspace(selected);
+        AgentsSetupPromptDialog.promptIfMissing(stage, normalized);
         if (workspaces.stream().anyMatch(ws -> ws.path().equals(normalized))) {
             WorkspaceContext existing = workspaces.stream()
                     .filter(ws -> ws.path().equals(normalized))

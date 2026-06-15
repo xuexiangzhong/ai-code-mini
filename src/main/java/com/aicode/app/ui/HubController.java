@@ -3,6 +3,7 @@ package com.aicode.app.ui;
 import com.aicode.app.config.AicodePaths;
 import com.aicode.app.config.ModelProfile;
 import com.aicode.app.config.ModelRegistry;
+import com.aicode.app.ui.dialog.AgentsSetupPromptDialog;
 import com.aicode.app.ui.dialog.ModelEditDialog;
 import com.aicode.app.ui.dialog.ModelSetupPromptDialog;
 import com.aicode.app.ui.dialog.ModelSetupPromptDialog.Choice;
@@ -38,6 +39,7 @@ public final class HubController {
     @FXML private Button deleteModelButton;
     @FXML private Button defaultModelButton;
     @FXML private Button openConfigFolderButton;
+    @FXML private Button browseAgentsTemplatesButton;
     @FXML private Button openProjectButton;
     @FXML private Button openAgentsButton;
 
@@ -65,6 +67,7 @@ public final class HubController {
         addModelButton.setOnAction(e -> addModel());
         quickAddButton.setOnAction(e -> addModel());
         openGuideButton.setOnAction(e -> openGuideInBrowser());
+        browseAgentsTemplatesButton.setOnAction(e -> browseAgentsTemplates());
         editModelButton.setOnAction(e -> editModel());
         deleteModelButton.setOnAction(e -> deleteModel());
         defaultModelButton.setOnAction(e -> setDefault());
@@ -127,6 +130,7 @@ public final class HubController {
         if (workspace == null) {
             return;
         }
+        promptAgentsMdIfMissing(workspace);
         try {
             windowManager.openProjectWindow(workspace, resolveModelId());
         } catch (Exception e) {
@@ -143,6 +147,7 @@ public final class HubController {
         if (workspace == null) {
             return;
         }
+        promptAgentsMdIfMissing(workspace);
         try {
             windowManager.openAgentsWindow(workspace, resolveModelId());
         } catch (Exception e) {
@@ -188,6 +193,14 @@ public final class HubController {
         } catch (Exception e) {
             statusLabel.setText("无法打开文件夹: " + e.getMessage());
         }
+    }
+
+    private void browseAgentsTemplates() {
+        AgentsSetupPromptDialog.show(stage(), AgentsSetupPromptDialog.Kind.BROWSE, null);
+    }
+
+    private void promptAgentsMdIfMissing(Path workspace) {
+        AgentsSetupPromptDialog.promptIfMissing(stage(), workspace);
     }
 
     private void openGuideInBrowser() {

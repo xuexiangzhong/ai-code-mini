@@ -33,6 +33,14 @@
                     <Button fx:id="openGuideButton" text="查看图文教程" styleClass="ghost-button"/>
                 </HBox>
             </VBox>
+            <VBox fx:id="agentsGuideBox" styleClass="hub-guide-card" spacing="6">
+                <Label text="项目 Agent 指令（AGENTS.md）" styleClass="guide-title"/>
+                <Label text="在项目根目录放置 AGENTS.md，Agent 会自动读取其中的技术栈、编码规范与协作约定。打开工作区时若无此文件，可一键从预设模板创建。"
+                       wrapText="true" styleClass="guide-step"/>
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Button fx:id="browseAgentsTemplatesButton" text="查看预设模板" styleClass="ghost-button"/>
+                </HBox>
+            </VBox>
             <VBox styleClass="hub-card" spacing="10">
                 <Label text="MODELS" styleClass="section-title"/>
                 <HBox spacing="8" alignment="CENTER_LEFT">
