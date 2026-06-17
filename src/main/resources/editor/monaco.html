@@ -27,6 +27,8 @@
         fontFamily: 'JetBrains Mono, SF Mono, Menlo, Consolas, monospace',
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
+        mouseWheelScrollSensitivity: 1,
+        fastScrollSensitivity: 1,
         wordWrap: 'on',
         tabSize: 2,
         insertSpaces: true
@@ -99,6 +101,12 @@
 
     function focusEditor() {
       if (editor) editor.focus();
+    }
+
+    function scrollByLines(lines) {
+      if (!editor || !lines) return;
+      var lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
+      editor.setScrollTop(editor.getScrollTop() + lines * lineHeight);
     }
   </script>
 </body>

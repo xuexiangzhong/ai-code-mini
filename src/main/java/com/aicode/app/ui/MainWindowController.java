@@ -34,7 +34,6 @@ public final class MainWindowController {
     private final WindowManager windowManager;
     private final Path initialWorkspace;
     private final String initialModelId;
-    private DiffReviewPanel diffReviewPanel;
     private AgentSessionBinder binder;
 
     @FXML private TextField workspaceField;
@@ -102,10 +101,6 @@ public final class MainWindowController {
         VBox.setVgrow(chatView, Priority.ALWAYS);
         chatMessagesHost.getChildren().add(chatView);
 
-        diffReviewPanel = new DiffReviewPanel();
-        diffReviewPanel.setOnFileChanged(this::reloadEditedFile);
-        chatMessagesHost.getChildren().add(0, diffReviewPanel);
-
         composerInput = createComposerInput(workspaceRoot);
         HBox.setHgrow(composerInput.node(), Priority.ALWAYS);
         chatInputHost.getChildren().add(composerInput);
@@ -123,8 +118,8 @@ public final class MainWindowController {
                 statusLabel,
                 () -> appendChat("请先在「模型配置」主界面添加模型并填写 API Key。\n\n")
         );
-        binder.setDiffReviewPanel(diffReviewPanel);
         binder.setToolLogConsumer(terminalPane::appendToolLog);
+        binder.setOnFileEditChanged(this::reloadEditedFile);
         binder.bindConversations(conversationList, newConversationButton);
         binder.initializeModes();
         hubButton.setOnAction(e -> binder.appendSystemLine("请在「AiCode — 模型配置」主窗口中管理模型。"));
@@ -261,7 +256,7 @@ public final class MainWindowController {
         return new WorkspaceGuard(
                 workspaceRoot,
                 new com.aicode.agent.Safety.FileSystemSandbox(
-                        java.util.List.of(workspaceRoot.toString(), System.getProperty("java.io.tmpdir"))
+                        com.aicode.agent.SkillContext.toolSandboxRoots(workspaceRoot)
                 )
         );
     }

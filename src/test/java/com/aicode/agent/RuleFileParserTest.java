@@ -27,4 +27,48 @@ class RuleFileParserTest {
         assertEquals("", parsed.metadata());
         assertEquals("# Title\nBody", parsed.body());
     }
+
+    @Test
+    void parsesSkillFrontmatter() {
+        RuleFileParser.ParsedSkill parsed = RuleFileParser.parseSkill("""
+                ---
+                name: commit
+                description: Generate conventional commits
+                disable-model-invocation: false
+                alwaysApply: true
+                ---
+                Step one
+                """);
+        assertEquals("commit", parsed.name());
+        assertEquals("Generate conventional commits", parsed.description());
+        assertFalse(parsed.disableModelInvocation());
+        assertTrue(parsed.alwaysApply());
+        assertEquals("Step one", parsed.body());
+    }
+
+    @Test
+    void parsesRuleFileKinds() {
+        RuleFileParser.ParsedRuleFile legacy = RuleFileParser.parseRuleFile("- Use 4 spaces");
+        assertTrue(legacy.alwaysApply());
+        assertEquals(RuleFileParser.RuleKind.ALWAYS_APPLY, legacy.kind());
+
+        RuleFileParser.ParsedRuleFile glob = RuleFileParser.parseRuleFile("""
+                ---
+                description: Java conventions
+                globs: **/*.java
+                ---
+                Prefer var
+                """);
+        assertFalse(glob.alwaysApply());
+        assertEquals(RuleFileParser.RuleKind.GLOB, glob.kind());
+
+        RuleFileParser.ParsedRuleFile requested = RuleFileParser.parseRuleFile("""
+                ---
+                description: Review PRs
+                alwaysApply: false
+                ---
+                Body
+                """);
+        assertEquals(RuleFileParser.RuleKind.AGENT_REQUESTED, requested.kind());
+    }
 }

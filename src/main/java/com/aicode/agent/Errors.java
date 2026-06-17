@@ -159,6 +159,14 @@ public final class Errors {
         return error;
     }
 
+    /** Whether a tool executor result string represents a failure (from {@link #safeToolExecutor}). */
+    public static boolean isToolErrorResult(String result) {
+        if (result == null || result.isBlank()) {
+            return false;
+        }
+        return result.startsWith("Error:") || result.startsWith("Error executing ");
+    }
+
     public static Agent.ToolExecutor safeToolExecutor(Agent.ToolExecutor executor, Set<String> knownTools) {
         return (name, input) -> {
             if (knownTools != null && !knownTools.contains(name)) {

@@ -22,14 +22,11 @@ class ProjectContextTest {
     }
 
     @Test
-    void loadsProjectRules() throws Exception {
+    void doesNotLoadProjectRules() throws Exception {
         Path rules = workspace.resolve(".aicode/rules");
         Files.createDirectories(rules);
         Files.writeString(rules.resolve("style.md"), "- Use 4 spaces");
-        String ctx = ProjectContext.loadForPrompt(workspace);
-        assertNotNull(ctx);
-        assertTrue(ctx.contains("Project Rules"));
-        assertTrue(ctx.contains("4 spaces"));
+        assertNull(ProjectContext.loadForPrompt(workspace));
     }
 
     @Test
@@ -50,40 +47,16 @@ class ProjectContextTest {
     }
 
     @Test
-    void loadsReadme() throws Exception {
+    void doesNotLoadReadmeByDefault() throws Exception {
         Files.writeString(workspace.resolve("README.md"), "# Project\nBuild with Maven.");
-        String ctx = ProjectContext.loadForPrompt(workspace);
-        assertNotNull(ctx);
-        assertTrue(ctx.contains("README.md"));
-        assertTrue(ctx.contains("Maven"));
+        assertNull(ProjectContext.loadForPrompt(workspace));
     }
 
     @Test
-    void loadsMdcRulesWithFrontmatter() throws Exception {
-        Path rules = workspace.resolve(".cursor/rules");
-        Files.createDirectories(rules);
-        Files.writeString(rules.resolve("java.mdc"), """
-                ---
-                description: Java conventions
-                globs: **/*.java
-                ---
-                Prefer var for locals.
-                """);
-        String ctx = ProjectContext.loadForPrompt(workspace);
-        assertNotNull(ctx);
-        assertTrue(ctx.contains("Java conventions"));
-        assertTrue(ctx.contains("Prefer var for locals"));
-        assertFalse(ctx.contains("---"));
-    }
-
-    @Test
-    void loadsSkills() throws Exception {
+    void skillsAreNotLoadedIntoProjectContext() throws Exception {
         Path skillDir = workspace.resolve(".cursor/skills/commit");
         Files.createDirectories(skillDir);
         Files.writeString(skillDir.resolve("SKILL.md"), "Always write conventional commits.");
-        String ctx = ProjectContext.loadForPrompt(workspace);
-        assertNotNull(ctx);
-        assertTrue(ctx.contains("Skills"));
-        assertTrue(ctx.contains("conventional commits"));
+        assertNull(ProjectContext.loadForPrompt(workspace));
     }
 }

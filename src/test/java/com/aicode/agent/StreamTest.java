@@ -123,6 +123,27 @@ class StreamTest {
         }
 
         @Test
+        void includesTokenUsageFromStream() {
+            String sse = """
+                    data: {"choices":[{"delta":{"content":"Hello"}}]}
+
+                    data: {"choices":[],"usage":{"prompt_tokens":42,"completion_tokens":7}}
+
+                    data: [DONE]
+
+                    """;
+            server.enqueue(new MockResponse()
+                    .setBody(sse)
+                    .addHeader("Content-Type", "text/event-stream"));
+
+            List<StreamEvent> events = collectEvents(provider());
+            ChatResponse response = events.get(events.size() - 1).response();
+            assertNotNull(response);
+            assertEquals(42, response.inputTokens());
+            assertEquals(7, response.outputTokens());
+        }
+
+        @Test
         void skipMalformedToolCallArgumentsWithoutLengthFinishReason() {
             String sse = """
                     data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Write","arguments":"{\\"path\\":\\"/tmp/test.txt\\",\\"content\\":\\""}}]}}]}
@@ -141,7 +162,7 @@ class StreamTest {
             List<StreamEvent> events = collectEvents(provider());
             ChatResponse response = events.get(events.size() - 1).response();
             assertNotNull(response);
-            assertEquals("max_tokens", response.stopReason());
+            assertEquals("end_turn", response.stopReason());
             assertTrue(response.content().stream().noneMatch(b -> b instanceof com.aicode.agent.llm.ToolUseBlock));
         }
 

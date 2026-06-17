@@ -91,6 +91,7 @@ public final class AgentsWindowController {
         chatView = new ChatTranscriptView();
         VBox.setVgrow(chatView, Priority.ALWAYS);
         chatMessagesHost.getChildren().add(chatView);
+        chatView.setOnFileEditChanged(this::reloadEditedFile);
 
         composerInput = new AtMentionInput();
         composerInput.setPromptText("发送消息…（@ 引用文件，Enter 发送，Shift+Enter 换行）");
@@ -315,7 +316,7 @@ public final class AgentsWindowController {
         return new WorkspaceGuard(
                 workspace,
                 new com.aicode.agent.Safety.FileSystemSandbox(
-                        java.util.List.of(workspace.toString(), System.getProperty("java.io.tmpdir"))
+                        com.aicode.agent.SkillContext.toolSandboxRoots(workspace)
                 )
         );
     }
@@ -360,5 +361,23 @@ public final class AgentsWindowController {
 
     private void appendChat(String text) {
         Platform.runLater(() -> chatView.appendStandaloneNotice(text.strip()));
+    }
+
+    private void reloadEditedFile(Path path) {
+        if (path == null || editorTabs == null) {
+            return;
+        }
+        Thread.ofVirtual().name("reload-edited-file").start(() -> {
+            try {
+                if (!Files.isRegularFile(path)) {
+                    Platform.runLater(() -> editorTabs.closeFile(path));
+                    return;
+                }
+                String content = Files.readString(path);
+                Platform.runLater(() -> editorTabs.reloadFile(path, content));
+            } catch (IOException ignored) {
+                // ignore reload errors
+            }
+        });
     }
 }

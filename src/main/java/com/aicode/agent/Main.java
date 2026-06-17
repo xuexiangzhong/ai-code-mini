@@ -81,7 +81,7 @@ public final class Main {
 
         String tempDir = System.getProperty("java.io.tmpdir");
         Safety.FileSystemSandbox sandbox = new Safety.FileSystemSandbox(
-                List.of(projectDir, tempDir)
+                SkillContext.toolSandboxRoots(Path.of(projectDir))
         );
 
         Agent.ToolExecutor rawExecutor = (name, input) -> {
@@ -154,7 +154,8 @@ public final class Main {
         for (Tool t : allTools) {
             knownTools.add(t.name());
         }
-        Agent.ToolExecutor executeTool = Errors.safeToolExecutor(rawExecutor, knownTools);
+        Agent.ToolExecutor executeTool = ToolOutputLimiter.wrap(
+                Errors.safeToolExecutor(rawExecutor, knownTools));
 
         String systemPrompt = PromptFactory.buildAgentPrompt(Path.of(projectDir), allTools);
 

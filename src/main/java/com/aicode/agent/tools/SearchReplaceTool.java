@@ -82,7 +82,7 @@ public final class SearchReplaceTool {
                 : replaceFirst(oldContent, input.oldString(), input.newString());
 
         if (oldContent.equals(newContent)) {
-            return "Updated " + input.filePath() + " (no changes)\n\n(no changes)";
+            return "Updated " + input.filePath() + " (no changes)";
         }
 
         try {
@@ -91,9 +91,9 @@ public final class SearchReplaceTool {
             return "Error: cannot write file: " + e.getMessage();
         }
 
-        String diff = FileDiff.generate(oldContent, newContent, input.filePath());
+        FileDiff.ChangeStats stats = FileDiff.countChanges(oldContent, newContent);
         int replacements = input.replaceAll() ? count : 1;
-        return "Updated " + input.filePath() + " (" + replacements + " replacement(s))\n\n" + diff;
+        return "Updated " + input.filePath() + " (" + replacements + " replacement(s), " + stats.summary() + ")";
     }
 
     private static int countOccurrences(String text, String needle) {

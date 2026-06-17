@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -49,8 +50,18 @@ public final class TurnContext {
             appendActiveFile(sb);
         }
         appendGitLines(sb);
+        appendMatchingRules(sb);
         sb.append("</environment>");
         return sb.toString();
+    }
+
+    private void appendMatchingRules(StringBuilder sb) {
+        List<RuleContext.RuleMeta> rules = RuleContext.discover(workspace);
+        String matching = RuleContext.formatMatchingGlobRules(workspace, activeFile, rules);
+        if (matching == null || matching.isBlank()) {
+            return;
+        }
+        sb.append("\n<active-rules>\n").append(matching).append("\n</active-rules>\n");
     }
 
     public String prependToUserMessage(String userMessage) {

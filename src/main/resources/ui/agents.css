@@ -305,12 +305,72 @@
     -fx-background-color: transparent;
 }
 
+.agent-chat-log .chat-file-edit-card {
+    -fx-background-color: #ffffff;
+    -fx-border-color: rgba(66, 133, 244, 0.35);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.06), 6, 0, 0, 1);
+}
+
+.agent-chat-log .chat-file-edit-card-resolved {
+    -fx-background-color: #f5f5f3;
+    -fx-border-color: #d8d8d4;
+}
+
+.agent-chat-log .chat-file-edit-title {
+    -fx-text-fill: #2c2c2a;
+}
+
+.agent-chat-log .chat-file-edit-card-resolved .chat-file-edit-title {
+    -fx-text-fill: #6b7280;
+}
+
+.agent-chat-log .chat-file-edit-accept {
+    -fx-background-color: #e6f4ea;
+    -fx-text-fill: #137333;
+}
+
+.agent-chat-log .chat-file-edit-reject {
+    -fx-background-color: #fce8e6;
+    -fx-text-fill: #c5221f;
+}
+
+.agent-chat-log .chat-file-edit-details {
+    -fx-text-fill: #3c6ea8;
+    -fx-border-color: rgba(60, 110, 168, 0.35);
+}
+
+.file-edit-diff-dialog-light {
+    -fx-background-color: #f7f7f4;
+}
+
+.file-edit-diff-dialog-light .file-edit-diff-title {
+    -fx-text-fill: #2c2c2a;
+}
+
+.file-edit-diff-dialog-light .file-edit-diff-side-title {
+    -fx-text-fill: #6b7280;
+}
+
+.file-edit-diff-dialog-light .file-edit-diff-body {
+    -fx-control-inner-background: #ffffff;
+    -fx-text-fill: #1a1a18;
+}
+
+.file-edit-diff-dialog-light.file-edit-diff-split > .split-pane-divider,
+.file-edit-diff-dialog-light .file-edit-diff-split > .split-pane-divider {
+    -fx-background-color: #d8d8d4;
+}
+
 .agent-chat-log .chat-bubble-user {
     -fx-background-color: #dce8ff;
     -fx-effect: dropshadow(gaussian, rgba(66,133,244,0.12), 8, 0, 0, 2);
 }
 
 .agent-chat-log .chat-bubble-user .chat-bubble-body {
+    -fx-text-fill: #1a1a18;
+}
+
+.agent-chat-log .chat-bubble-user .chat-bubble-body.text-area .content {
     -fx-text-fill: #1a1a18;
 }
 
@@ -321,6 +381,10 @@
 }
 
 .agent-chat-log .chat-bubble-assistant .chat-bubble-body {
+    -fx-text-fill: #2c2c2a;
+}
+
+.agent-chat-log .chat-bubble-assistant .chat-bubble-body.text-area .content {
     -fx-text-fill: #2c2c2a;
 }
 

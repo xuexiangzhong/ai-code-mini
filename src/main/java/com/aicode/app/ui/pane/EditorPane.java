@@ -12,6 +12,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.Scene;
 import javafx.scene.web.WebEngine;
@@ -32,6 +33,7 @@ public final class EditorPane extends StackPane {
         getChildren().add(webView);
         webView.setContextMenuEnabled(false);
         installClipboardShortcuts();
+        installScrollNormalization();
         installSceneAccelerators();
         installContextMenu();
         engine.getLoadWorker().stateProperty().addListener((obs, old, state) -> {
@@ -49,6 +51,33 @@ public final class EditorPane extends StackPane {
     private void installClipboardShortcuts() {
         addEventFilter(KeyEvent.KEY_PRESSED, this::handleClipboardKey);
         webView.addEventFilter(KeyEvent.KEY_PRESSED, this::handleClipboardKey);
+    }
+
+    private void installScrollNormalization() {
+        addEventFilter(ScrollEvent.SCROLL, this::handleScrollNormalize);
+        webView.addEventFilter(ScrollEvent.SCROLL, this::handleScrollNormalize);
+    }
+
+    /**
+     * JavaFX WebView on Windows often delivers oversized wheel deltas to the embedded page,
+     * which makes Monaco jump dozens of lines per notch. Normalize here and scroll via JS.
+     */
+    private void handleScrollNormalize(ScrollEvent event) {
+        event.consume();
+        int lines = scrollLinesFromDelta(event.getDeltaY());
+        if (lines == 0) {
+            return;
+        }
+        whenReady(() -> engine.executeScript("scrollByLines(" + lines + ");"));
+    }
+
+    private static int scrollLinesFromDelta(double deltaY) {
+        if (deltaY == 0) {
+            return 0;
+        }
+        int magnitude = (int) Math.round(Math.abs(deltaY) / 40.0);
+        magnitude = Math.max(1, Math.min(5, magnitude));
+        return deltaY > 0 ? magnitude : -magnitude;
     }
 
     private void installSceneAccelerators() {

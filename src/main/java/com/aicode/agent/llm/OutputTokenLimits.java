@@ -6,7 +6,7 @@ package com.aicode.agent.llm;
 public record OutputTokenLimits(int base, int cap, int maxRetries) {
     public static final int DEFAULT_BASE = 8192;
     public static final int DEFAULT_CAP = 32768;
-    public static final int DEFAULT_RETRIES = 2;
+    public static final int DEFAULT_RETRIES = 1;
 
     public static OutputTokenLimits defaults() {
         return new OutputTokenLimits(DEFAULT_BASE, DEFAULT_CAP, DEFAULT_RETRIES);

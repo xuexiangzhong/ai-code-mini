@@ -58,7 +58,11 @@ class AgentStreamTest {
         ).join();
 
         assertEquals("Hi", result.text());
-        assertTrue(events.stream().anyMatch(e -> e instanceof AgentEvent.TextDelta));
+        List<String> deltas = events.stream()
+                .filter(AgentEvent.TextDelta.class::isInstance)
+                .map(e -> ((AgentEvent.TextDelta) e).delta())
+                .toList();
+        assertEquals(List.of("H", "i"), deltas);
         assertTrue(events.stream().anyMatch(e -> e instanceof AgentEvent.TextDone));
         assertTrue(events.stream().anyMatch(e -> e instanceof AgentEvent.Done));
     }

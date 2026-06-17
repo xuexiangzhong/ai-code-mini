@@ -1,30 +1,44 @@
 package com.aicode.app.ui;
 
+import com.aicode.app.session.FileEditProposal;
 import com.aicode.app.ui.dialog.ActivityLogDialog;
+import com.aicode.app.ui.dialog.FileEditDiffDialog;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /** Scrollable chat area with styled user / assistant bubbles and a single activity strip per turn. */
 public final class ChatTranscriptView extends ScrollPane {
     private static final double LOAD_OLDER_THRESHOLD = 0.08;
 
     private final VBox messageBox = new VBox(10);
-    private Label streamingBody;
+    private TextArea streamingBody;
     private TurnUi currentTurn;
     private Runnable onLoadOlder;
     private boolean hasOlderTurns;
     private boolean loadingOlderTurns;
+    private BiConsumer<String, Boolean> onFileEditResolved = (id, kept) -> {};
+    private Consumer<Path> onFileEditChanged = path -> {};
+    private final Map<String, FileEditCardUi> pendingFileEdits = new LinkedHashMap<>();
 
     public ChatTranscriptView() {
         getStyleClass().add("chat-transcript");
@@ -37,6 +51,28 @@ public final class ChatTranscriptView extends ScrollPane {
         messageBox.setPadding(new Insets(6, 4, 12, 4));
         setContent(messageBox);
         vvalueProperty().addListener((obs, oldValue, newValue) -> maybeLoadOlder(newValue.doubleValue()));
+    }
+
+    public void setOnFileEditResolved(BiConsumer<String, Boolean> onFileEditResolved) {
+        this.onFileEditResolved = onFileEditResolved != null ? onFileEditResolved : (id, kept) -> {};
+    }
+
+    public void setOnFileEditChanged(Consumer<Path> onFileEditChanged) {
+        this.onFileEditChanged = onFileEditChanged != null ? onFileEditChanged : path -> {};
+    }
+
+    /** Inline Cursor-style card: compact accept/reject in the chat stream. */
+    public void showFileEditReview(FileEditProposal proposal) {
+        if (proposal == null) {
+            return;
+        }
+        Platform.runLater(() -> {
+            ensureCurrentTurn();
+            FileEditCardUi card = buildFileEditCard(proposal);
+            pendingFileEdits.put(proposal.id(), card);
+            insertFileEditCard(card.root());
+            scrollToBottom();
+        });
     }
 
     public void setOnLoadOlder(Runnable onLoadOlder) {
@@ -55,6 +91,7 @@ public final class ChatTranscriptView extends ScrollPane {
         messageBox.getChildren().clear();
         streamingBody = null;
         currentTurn = null;
+        pendingFileEdits.clear();
     }
 
     public void loadTurns(List<ChatTurn> turns) {
@@ -106,7 +143,84 @@ public final class ChatTranscriptView extends ScrollPane {
         onLoadOlder.run();
     }
 
-    public void startTurn(String userText) {
+    private void ensureCurrentTurn() {
+        if (currentTurn == null) {
+            startTurn(null);
+        }
+    }
+
+    private void insertFileEditCard(VBox card) {
+        VBox turnBox = currentTurn.turnBox;
+        if (currentTurn.fileEditHost == null) {
+            currentTurn.fileEditHost = new VBox(6);
+            currentTurn.fileEditHost.getStyleClass().add("chat-file-edit-host");
+            turnBox.getChildren().add(currentTurn.fileEditHost);
+        } else {
+            // Keep pending review cards below assistant text and other turn content.
+            turnBox.getChildren().remove(currentTurn.fileEditHost);
+            turnBox.getChildren().add(currentTurn.fileEditHost);
+        }
+        currentTurn.fileEditHost.getChildren().add(card);
+    }
+
+    private FileEditCardUi buildFileEditCard(FileEditProposal proposal) {
+        Label title = new Label("📝 " + proposal.summary());
+        title.getStyleClass().add("chat-file-edit-title");
+        title.setMaxWidth(Double.MAX_VALUE);
+
+        Button accept = new Button("接受");
+        Button reject = new Button("拒绝");
+        accept.getStyleClass().addAll("chat-file-edit-btn", "chat-file-edit-accept");
+        reject.getStyleClass().addAll("chat-file-edit-btn", "chat-file-edit-reject");
+
+        Button details = new Button("改动");
+        details.getStyleClass().addAll("chat-file-edit-btn", "chat-file-edit-details");
+        details.setOnAction(e -> {
+            Stage owner = getScene() != null ? (Stage) getScene().getWindow() : null;
+            FileEditDiffDialog.show(owner, proposal);
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox actions = new HBox(6, accept, reject, details, spacer);
+        actions.setAlignment(Pos.CENTER_LEFT);
+
+        VBox card = new VBox(4, title, actions);
+        card.getStyleClass().add("chat-file-edit-card");
+        card.setMaxWidth(Double.MAX_VALUE);
+
+        HBox row = new HBox(card);
+        row.getStyleClass().add("chat-row-file-edit");
+        row.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(card, Priority.ALWAYS);
+
+        VBox root = new VBox(row);
+
+        accept.setOnAction(e -> resolveFileEdit(proposal, card, title, actions, true));
+        reject.setOnAction(e -> resolveFileEdit(proposal, card, title, actions, false));
+
+        return new FileEditCardUi(root, card, title, actions);
+    }
+
+    private void resolveFileEdit(
+            FileEditProposal proposal,
+            VBox card,
+            Label title,
+            HBox actions,
+            boolean kept
+    ) {
+        onFileEditResolved.accept(proposal.id(), kept);
+        pendingFileEdits.remove(proposal.id());
+        card.getStyleClass().add("chat-file-edit-card-resolved");
+        title.setText((kept ? "✓ " : "✗ ") + proposal.summary() + (kept ? " · 已保留" : " · 已撤销"));
+        actions.setVisible(false);
+        actions.setManaged(false);
+        onFileEditChanged.accept(proposal.filePath());
+        scrollToBottom();
+    }
+
+    private void startTurn(String userText) {
         startTurn(userText, java.time.Instant.now().toString());
     }
 
@@ -135,7 +249,8 @@ public final class ChatTranscriptView extends ScrollPane {
         if (streamingBody == null) {
             beginAssistantStream();
         }
-        streamingBody.setText(streamingBody.getText() + text);
+        streamingBody.appendText(text);
+        adjustMessageHeight(streamingBody);
         scrollToBottom();
     }
 
@@ -148,10 +263,12 @@ public final class ChatTranscriptView extends ScrollPane {
             return;
         }
         if (streamingBody != null) {
-            streamingBody.setText(streamingBody.getText() + text);
+            streamingBody.appendText(text);
+            adjustMessageHeight(streamingBody);
         } else {
             beginAssistantStream();
-            streamingBody.setText(streamingBody.getText() + text);
+            streamingBody.appendText(text);
+            adjustMessageHeight(streamingBody);
         }
         scrollToBottom();
     }
@@ -236,10 +353,7 @@ public final class ChatTranscriptView extends ScrollPane {
     }
 
     private HBox createUserBubble(String text) {
-        Label body = new Label(text);
-        body.getStyleClass().add("chat-bubble-body");
-        body.setWrapText(true);
-        body.setMaxWidth(Region.USE_PREF_SIZE);
+        TextArea body = createMessageBody(text);
 
         VBox bubble = new VBox(body);
         bubble.getStyleClass().add("chat-bubble-user");
@@ -252,11 +366,8 @@ public final class ChatTranscriptView extends ScrollPane {
         return row;
     }
 
-    private Label attachAssistantBlock(VBox turnBox) {
-        Label body = new Label("");
-        body.getStyleClass().add("chat-bubble-body");
-        body.setWrapText(true);
-        body.setMaxWidth(Region.USE_PREF_SIZE);
+    private TextArea attachAssistantBlock(VBox turnBox) {
+        TextArea body = createMessageBody("");
 
         VBox bubble = new VBox(body);
         bubble.getStyleClass().add("chat-bubble-assistant");
@@ -266,7 +377,13 @@ public final class ChatTranscriptView extends ScrollPane {
         row.getStyleClass().add("chat-row-assistant");
         row.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(row, Priority.ALWAYS);
-        turnBox.getChildren().add(row);
+        if (currentTurn != null && currentTurn.fileEditHost != null
+                && turnBox.getChildren().contains(currentTurn.fileEditHost)) {
+            int idx = turnBox.getChildren().indexOf(currentTurn.fileEditHost);
+            turnBox.getChildren().add(idx, row);
+        } else {
+            turnBox.getChildren().add(row);
+        }
         return body;
     }
 
@@ -309,6 +426,48 @@ public final class ChatTranscriptView extends ScrollPane {
         setVvalue(1.0);
     }
 
+    private static TextArea createMessageBody(String text) {
+        TextArea body = new TextArea(text == null ? "" : text);
+        body.getStyleClass().add("chat-bubble-body");
+        body.setEditable(false);
+        body.setWrapText(true);
+        body.setMaxWidth(Region.USE_PREF_SIZE);
+        body.setPrefColumnCount(28);
+        adjustMessageHeight(body);
+        body.textProperty().addListener((obs, old, val) -> adjustMessageHeight(body));
+        installCopyContextMenu(body);
+        return body;
+    }
+
+    private static void installCopyContextMenu(TextArea body) {
+        MenuItem copy = new MenuItem("复制");
+        copy.setOnAction(e -> {
+            String selected = body.getSelectedText();
+            if (selected != null && !selected.isEmpty()) {
+                body.copy();
+            } else {
+                body.selectAll();
+                body.copy();
+                body.deselect();
+            }
+        });
+        body.setContextMenu(new ContextMenu(copy));
+    }
+
+    /** Estimate visible rows so the bubble grows with content without an inner scrollbar. */
+    private static void adjustMessageHeight(TextArea body) {
+        String text = body.getText();
+        if (text == null || text.isEmpty()) {
+            body.setPrefRowCount(1);
+            return;
+        }
+        int rows = 0;
+        for (String line : text.split("\n", -1)) {
+            rows += Math.max(1, (line.length() + 41) / 42);
+        }
+        body.setPrefRowCount(Math.min(60, Math.max(1, rows)));
+    }
+
     private static String previewLine(String text) {
         String oneLine = text.replace('\n', ' ').strip();
         if (oneLine.length() <= 72) {
@@ -323,10 +482,13 @@ public final class ChatTranscriptView extends ScrollPane {
         private HBox activityRow;
         private Label previewLabel;
         private Label countLabel;
-        private Label assistantBody;
+        private TextArea assistantBody;
+        private VBox fileEditHost;
 
         private TurnUi(List<String> activities) {
             this.activities = new ArrayList<>(activities);
         }
     }
+
+    private record FileEditCardUi(VBox root, VBox card, Label title, HBox actions) {}
 }

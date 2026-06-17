@@ -239,6 +239,36 @@
     -fx-wrap-text: true;
 }
 
+.chat-bubble-body.text-area {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.chat-bubble-body.text-area .content {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.chat-bubble-body.text-area .scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.chat-bubble-body.text-area .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.chat-bubble-body.text-area .scroll-bar:vertical {
+    -fx-opacity: 0;
+    -fx-pref-width: 0;
+    -fx-min-width: 0;
+    -fx-max-width: 0;
+}
+
 .chat-bubble-user {
     -fx-background-color: #2d5a87;
     -fx-background-radius: 16 16 4 16;
@@ -248,6 +278,10 @@
 }
 
 .chat-bubble-user .chat-bubble-body {
+    -fx-text-fill: #eef4fc;
+}
+
+.chat-bubble-user .chat-bubble-body.text-area .content {
     -fx-text-fill: #eef4fc;
 }
 
@@ -263,6 +297,10 @@
 }
 
 .chat-bubble-assistant .chat-bubble-body {
+    -fx-text-fill: #dcdcdc;
+}
+
+.chat-bubble-assistant .chat-bubble-body.text-area .content {
     -fx-text-fill: #dcdcdc;
 }
 
@@ -414,26 +452,100 @@
     -fx-padding: 4 0;
 }
 
-.diff-review-panel {
-    -fx-background-color: #222222;
-    -fx-border-color: #333333;
-    -fx-border-width: 1 0 0 0;
+.chat-row-file-edit {
+    -fx-padding: 0 8 0 0;
 }
 
-.diff-review-title {
-    -fx-text-fill: #c8c8c8;
+.chat-file-edit-host {
+    -fx-spacing: 6;
+}
+
+.chat-file-edit-card {
+    -fx-background-color: #2a2a2a;
+    -fx-background-radius: 10;
+    -fx-border-color: rgba(86, 156, 214, 0.35);
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 8 10;
+}
+
+.chat-file-edit-card-resolved {
+    -fx-border-color: rgba(120, 120, 120, 0.35);
+    -fx-background-color: #242424;
+}
+
+.chat-file-edit-title {
+    -fx-text-fill: #dcdcdc;
     -fx-font-size: 12px;
+}
+
+.chat-file-edit-card-resolved .chat-file-edit-title {
+    -fx-text-fill: #9a9a9a;
+}
+
+.chat-file-edit-btn {
+    -fx-font-size: 11px;
+    -fx-padding: 3 10;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+
+.chat-file-edit-accept {
+    -fx-background-color: #2d5a3d;
+    -fx-text-fill: #e8f5e9;
+}
+
+.chat-file-edit-accept:hover {
+    -fx-background-color: #3a7049;
+}
+
+.chat-file-edit-reject {
+    -fx-background-color: #4a3030;
+    -fx-text-fill: #fce8e8;
+}
+
+.chat-file-edit-reject:hover {
+    -fx-background-color: #5c3a3a;
+}
+
+.chat-file-edit-details {
+    -fx-background-color: transparent;
+    -fx-text-fill: #8ab4d9;
+    -fx-border-color: rgba(138, 180, 217, 0.4);
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+}
+
+.chat-file-edit-details:hover {
+    -fx-background-color: rgba(86, 156, 214, 0.12);
+}
+
+.file-edit-diff-dialog {
+    -fx-background-color: #1e1e1e;
+}
+
+.file-edit-diff-title {
+    -fx-text-fill: #c8c8c8;
+    -fx-font-size: 13px;
     -fx-font-weight: bold;
 }
 
-.diff-review-list {
-    -fx-background-color: #1a1a1a;
-    -fx-border-color: #333333;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
+.file-edit-diff-split {
+    -fx-background-color: transparent;
 }
 
-.diff-review-text {
+.file-edit-diff-split > .split-pane-divider {
+    -fx-background-color: #3a3a3a;
+    -fx-padding: 0 1 0 1;
+}
+
+.file-edit-diff-side-title {
+    -fx-text-fill: #9a9a9a;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.file-edit-diff-body {
     -fx-control-inner-background: #1a1a1a;
     -fx-text-fill: #d4d4d4;
     -fx-font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;

@@ -188,5 +188,52 @@ class AgentTest {
             assertEquals("complete answer", result.text());
             assertEquals(1, result.iterations());
         }
+
+        @Test
+        void stopWhenToolUseHasNoParsedTools() {
+            LLMProvider provider = mockProvider(List.of(
+                    new ChatResponse(
+                            List.of(new TextBlock("Let me try.")),
+                            "Let me try.",
+                            "tool_use",
+                            Map.of("input_tokens", 5, "output_tokens", 5)
+                    )
+            ));
+            Agent.AgentResult result = Agent.runAgent(
+                    baseConfig(provider, (name, input) -> CompletableFuture.completedFuture("ok")),
+                    "Broken tools"
+            ).join();
+            assertTrue(result.text().contains("Tool call failed"));
+            assertEquals(1, result.iterations());
+            assertTrue(result.toolCalls().isEmpty());
+        }
+
+        @Test
+        void markToolErrorsInHistory() {
+            LLMProvider provider = mockProvider(List.of(
+                    new ChatResponse(
+                            List.of(new ToolUseBlock("call_1", "test_tool", Map.of("query", "x"))),
+                            "", "tool_use", Map.of("input_tokens", 5, "output_tokens", 5)
+                    ),
+                    new ChatResponse(
+                            List.of(new TextBlock("Done.")), "Done.", "end_turn",
+                            Map.of("input_tokens", 5, "output_tokens", 5)
+                    )
+            ));
+            Agent.AgentResult result = Agent.runAgent(
+                    baseConfig(provider, (name, input) ->
+                            CompletableFuture.completedFuture("Error executing test_tool: boom")),
+                    "Run tool"
+            ).join();
+            assertEquals(1, result.toolCalls().size());
+            ToolResultBlock toolResult = result.appendedMessages().stream()
+                    .filter(m -> "user".equals(m.role()))
+                    .flatMap(m -> m.contentBlocks().stream())
+                    .filter(ToolResultBlock.class::isInstance)
+                    .map(ToolResultBlock.class::cast)
+                    .findFirst()
+                    .orElseThrow();
+            assertTrue(toolResult.isError());
+        }
     }
 }

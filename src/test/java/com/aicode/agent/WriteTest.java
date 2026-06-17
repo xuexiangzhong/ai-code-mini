@@ -51,14 +51,15 @@ class WriteTest {
         }
 
         @Test
-        void overwriteAndShowDiff() throws IOException {
+        void overwriteShowsSummaryNotFullDiff() throws IOException {
             Path path = testDir.resolve("existing.txt");
             Files.writeString(path, "old line 1\nold line 2\n");
             String result = WriteTool.execute(
                     new WriteTool.Input(path.toString(), "new line 1\nold line 2\n"));
             assertTrue(result.contains("Updated"));
-            assertTrue(result.contains("-old line 1"));
-            assertTrue(result.contains("+new line 1"));
+            assertTrue(result.contains("lines changed"));
+            assertFalse(result.contains("-old line 1"));
+            assertFalse(result.contains("+new line 1"));
             assertEquals("new line 1\nold line 2\n", Files.readString(path));
         }
 
@@ -68,7 +69,7 @@ class WriteTest {
             Files.writeString(path, "same content\n");
             String result = WriteTool.execute(
                     new WriteTool.Input(path.toString(), "same content\n"));
-            assertTrue(result.contains("(no changes)"));
+            assertTrue(result.contains("no changes"));
         }
 
         @Test

@@ -49,7 +49,6 @@ public final class AgentSessionBinder {
     private ListView<ConversationContext> conversationList;
     private StreamingChatAppender streamingChat;
     private ModelProfile activeModel;
-    private DiffReviewPanel diffReviewPanel;
     private Consumer<String> toolLogConsumer;
 
     public AgentSessionBinder(
@@ -106,14 +105,19 @@ public final class AgentSessionBinder {
                 : () -> "Workspace: " + workspaceRoot;
         this.statusShowsConversationTitle = statusShowsConversationTitle;
         this.streamingChat = new StreamingChatAppender(chatView);
+        chatView.setOnFileEditResolved((editId, kept) -> {
+            if (sessionService != null && active != null) {
+                sessionService.resolveFileEdit(active.sessionId(), editId, kept);
+            }
+        });
+    }
+
+    public void setOnFileEditChanged(Consumer<Path> onFileEditChanged) {
+        chatView.setOnFileEditChanged(onFileEditChanged);
     }
 
     public void setToolLogConsumer(Consumer<String> toolLogConsumer) {
         this.toolLogConsumer = toolLogConsumer;
-    }
-
-    public void setDiffReviewPanel(DiffReviewPanel diffReviewPanel) {
-        this.diffReviewPanel = diffReviewPanel;
     }
 
     public void bindConversations(ListView<ConversationContext> listView, Button newButton) {
@@ -328,11 +332,7 @@ public final class AgentSessionBinder {
                     }
                 },
                 (event, onComplete) -> showApproval(context, event, onComplete),
-                proposal -> {
-                    if (diffReviewPanel != null) {
-                        diffReviewPanel.propose(proposal);
-                    }
-                }
+                proposal -> chatView.showFileEditReview(proposal)
         ));
         return context;
     }

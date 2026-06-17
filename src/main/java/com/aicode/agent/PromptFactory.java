@@ -32,7 +32,7 @@ public final class PromptFactory {
                 )
                 .addSection("Environment", formatStaticEnvironment(workspace), 92);
 
-        String userRules = UserRulesContext.loadForPrompt();
+        String userRules = UserRulesContext.loadForPrompt(workspace);
         if (userRules != null) {
             builder.addSection("User Rules", userRules, 96);
         }
@@ -40,6 +40,28 @@ public final class PromptFactory {
         String projectConfig = ProjectContext.loadForPrompt(workspace, projectBudget);
         if (projectConfig != null) {
             builder.addSection("Project Instructions", projectConfig, 90);
+        }
+
+        List<RuleContext.RuleMeta> rules = RuleContext.discover(workspace);
+        String projectAlwaysRules = RuleContext.formatAlwaysApply(RuleContext.forScope(rules, "project"));
+        if (projectAlwaysRules != null) {
+            builder.addSection("Always-Applied Project Rules", projectAlwaysRules, 89);
+        }
+
+        String ruleCatalog = RuleContext.formatCatalog(rules);
+        if (ruleCatalog != null) {
+            builder.addSection("Available Rules", ruleCatalog, 87);
+        }
+
+        List<SkillContext.SkillMeta> skills = SkillContext.discover(workspace);
+        String alwaysApplySkills = SkillContext.formatAlwaysApply(skills);
+        if (alwaysApplySkills != null) {
+            builder.addSection("Always-Applied Skills", alwaysApplySkills, 86);
+        }
+
+        String skillCatalog = SkillContext.formatCatalog(skills);
+        if (skillCatalog != null) {
+            builder.addSection("Available Skills", skillCatalog, 88);
         }
 
         builder.addRules(agentRules())
@@ -70,7 +92,7 @@ public final class PromptFactory {
 
     public static List<String> agentRules() {
         return List.of(
-                "Always read a file before modifying it.",
+                "Read a file before modifying it when you do not already have its current contents.",
                 "Prefer search_replace for partial edits; use write_file only for new files or full rewrites.",
                 "Use list_dir to explore unfamiliar directories before reading files.",
                 "Use semantic_search for concept/behavior queries; use grep for exact symbols.",
@@ -82,15 +104,17 @@ public final class PromptFactory {
                 "Shell commands run via " + ShellRunner.activeShellDescription()
                         + ". Use syntax compatible with the active shell.",
                 "Simple tasks: call tools directly without narrating each step.",
-                "Project Instructions and User Rules override these defaults when they conflict."
+                "Project Instructions and User Rules override these defaults when they conflict.",
+                "When a skill applies, read its SKILL.md with read_file and follow it before acting.",
+                "When a project rule description applies, read the rule file with read_file and follow it before acting."
         );
     }
 
     public static String toolStrategyRules() {
         return String.join("\n", List.of(
                 "- Batch independent read/search tool calls in parallel when possible.",
-                "- If a tool fails, diagnose the error and retry with a different approach; "
-                        + "do not give up after a single failure.",
+                "- If a tool fails, diagnose the error and retry once with a corrected approach; "
+                        + "do not repeat the same failing call.",
                 "- Minimize scope: make the smallest correct change; avoid unrelated edits and over-engineering.",
                 "- Only create git commits when the user explicitly asks.",
                 "- Never skip git hooks (--no-verify) or force-push to main/master unless explicitly requested.",

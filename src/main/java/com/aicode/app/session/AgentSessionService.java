@@ -12,6 +12,7 @@ import com.aicode.agent.llm.StreamingChatHelper;
 import com.aicode.app.application.AgentApplication;
 import com.aicode.app.approval.ApprovalGate;
 import com.aicode.app.approval.CliApprovalHandler;
+import com.aicode.app.approval.FileEditGate;
 import com.aicode.app.config.WorkingDirectory;
 import com.aicode.app.event.AgentEvent;
 import com.aicode.app.event.AgentEventListener;
@@ -29,6 +30,7 @@ public final class AgentSessionService {
     private final AgentApplication application;
     private final Map<String, AgentSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, ApprovalGate> approvalGates = new ConcurrentHashMap<>();
+    private final Map<String, FileEditGate> fileEditGates = new ConcurrentHashMap<>();
     private final Map<String, ActiveRun> activeRuns = new ConcurrentHashMap<>();
     private final Map<String, String> sessionTitles = new ConcurrentHashMap<>();
     private final SessionPersistence persistence = new SessionPersistence();
@@ -270,9 +272,11 @@ public final class AgentSessionService {
                 listener,
                 cliApproval ? CliApprovalHandler::prompt : null
         );
+        FileEditGate fileEditGate = new FileEditGate();
         approvalGates.put(sessionId, gate);
+        fileEditGates.put(sessionId, fileEditGate);
         RunCancellation cancellation = new RunCancellation();
-        Agent.ToolExecutor baseExecutor = application.createToolExecutor(gate, listener);
+        Agent.ToolExecutor baseExecutor = application.createToolExecutor(gate, fileEditGate, listener);
         Agent.ToolExecutor executor = (name, input) -> {
             if (cancellation.isCancelled()) {
                 return CompletableFuture.failedFuture(new RunCancelledException(cancellation.partialText()));
@@ -600,6 +604,10 @@ public final class AgentSessionService {
         if (gate != null) {
             gate.cancelAll();
         }
+        FileEditGate fileEditGate = fileEditGates.get(sessionId);
+        if (fileEditGate != null) {
+            fileEditGate.cancelAll();
+        }
     }
 
     public boolean isRunning(String sessionId) {
@@ -611,6 +619,14 @@ public final class AgentSessionService {
         ApprovalGate gate = approvalGates.get(sessionId);
         if (gate != null) {
             gate.resolve(approvalId, approved);
+        }
+    }
+
+    public void resolveFileEdit(String sessionId, String editId, boolean kept) {
+        getSession(sessionId);
+        FileEditGate gate = fileEditGates.get(sessionId);
+        if (gate != null) {
+            gate.resolve(editId, kept);
         }
     }
 
@@ -726,6 +742,7 @@ public final class AgentSessionService {
         cancelSession(sessionId);
         AgentSession session = sessions.remove(sessionId);
         approvalGates.remove(sessionId);
+        fileEditGates.remove(sessionId);
         activeRuns.remove(sessionId);
         sessionTitles.remove(sessionId);
         if (session != null) {

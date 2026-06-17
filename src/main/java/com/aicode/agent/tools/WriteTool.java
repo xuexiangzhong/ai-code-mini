@@ -67,7 +67,10 @@ public final class WriteTool {
             return "Created " + input.filePath() + " (" + lines + " lines)";
         }
 
-        String diff = FileDiff.generate(oldContent, input.content(), input.filePath());
-        return "Updated " + input.filePath() + " (" + lines + " lines)\n\n" + diff;
+        FileDiff.ChangeStats stats = FileDiff.countChanges(oldContent, input.content());
+        if (!stats.hasChanges()) {
+            return "Updated " + input.filePath() + " (" + lines + " lines, no changes)";
+        }
+        return "Updated " + input.filePath() + " (" + lines + " lines, " + stats.summary() + ")";
     }
 }

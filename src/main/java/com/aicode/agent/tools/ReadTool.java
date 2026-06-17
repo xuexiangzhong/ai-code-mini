@@ -26,7 +26,7 @@ public final class ReadTool {
                             ),
                             "limit", Map.of(
                                     "type", "number",
-                                    "description", "Maximum number of lines to read (default: all)"
+                                    "description", "Maximum number of lines to read (default: 250)"
                             )
                     ),
                     "required", List.of("file_path")
@@ -34,6 +34,7 @@ public final class ReadTool {
     );
 
     public static final int MAX_FILE_SIZE = 1024 * 1024;
+    public static final int DEFAULT_LINE_LIMIT = 250;
 
     public record Input(String filePath, int offset, Integer limit) {
         public static Input fromMap(Map<String, Object> map) {
@@ -77,11 +78,16 @@ public final class ReadTool {
             }
 
             int startIdx = input.offset() - 1;
-            int endIdx = input.limit() != null ? startIdx + input.limit() : allLines.length;
+            int lineLimit = input.limit() != null ? input.limit() : DEFAULT_LINE_LIMIT;
+            if (lineLimit < 1) {
+                return "Error: limit must be >= 1";
+            }
+            int endIdx = startIdx + lineLimit;
             if (startIdx >= allLines.length) {
                 return "(empty: file has " + allLines.length + " lines, offset " + input.offset() + " is out of range)";
             }
             endIdx = Math.min(endIdx, allLines.length);
+            boolean truncated = input.limit() == null && endIdx < allLines.length;
 
             StringBuilder selected = new StringBuilder();
             for (int i = startIdx; i < endIdx; i++) {
@@ -94,7 +100,12 @@ public final class ReadTool {
                 return "(empty: file has " + allLines.length + " lines, offset " + input.offset() + " is out of range)";
             }
 
-            return formatWithLineNumbers(selected.toString(), input.offset());
+            String result = formatWithLineNumbers(selected.toString(), input.offset());
+            if (truncated) {
+                result += "\n…(showing lines " + input.offset() + "-" + endIdx
+                        + " of " + allLines.length + " total; use offset/limit to read more)";
+            }
+            return result;
         } catch (IOException e) {
             return "Error: cannot read file: " + e.getMessage();
         }

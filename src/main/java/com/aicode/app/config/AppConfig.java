@@ -30,7 +30,7 @@ public record AppConfig(
     private static final String DEFAULT_AGENT_NAME = "AI Coding";
     private static final String DEFAULT_AGENT_ICON = "🤖";
     private static final int DEFAULT_PORT = 8765;
-    private static final int DEFAULT_MAX_ITERATIONS = 50;
+    private static final int DEFAULT_MAX_ITERATIONS = 20;
     private static final int DEFAULT_CONTEXT_WINDOW = 32768;
 
     public static int defaultContextWindow() {

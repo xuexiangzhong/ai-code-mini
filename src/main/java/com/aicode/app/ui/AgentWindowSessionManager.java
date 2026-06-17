@@ -61,6 +61,14 @@ public final class AgentWindowSessionManager {
         this.footerLabel = footerLabel;
         this.onMissingModel = onMissingModel;
         this.streamingChat = new StreamingChatAppender(chatView);
+        chatView.setOnFileEditResolved((editId, kept) -> resolveFileEdit(editId, kept));
+    }
+
+    public void resolveFileEdit(String editId, boolean kept) {
+        WorkspaceContext workspace = findWorkspaceFor(activeConversation);
+        if (workspace != null && workspace.sessionService() != null && activeConversation != null) {
+            workspace.sessionService().resolveFileEdit(activeConversation.sessionId(), editId, kept);
+        }
     }
 
     public void setOnWorkspaceActivated(Consumer<Path> onWorkspaceActivated) {
@@ -364,7 +372,8 @@ public final class AgentWindowSessionManager {
         return new UiAgentBridge(
                 text -> appendStreamToConversation(conversation, text),
                 text -> appendActivity(conversation, text),
-                (event, onComplete) -> showApproval(conversation, event, onComplete)
+                (event, onComplete) -> showApproval(conversation, event, onComplete),
+                chatView::showFileEditReview
         );
     }
 

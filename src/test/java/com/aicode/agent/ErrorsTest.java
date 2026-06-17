@@ -270,4 +270,16 @@ class ErrorsTest {
             assertEquals("ok", result);
         }
     }
+
+    @Nested
+    class TestIsToolErrorResult {
+        @Test
+        void detectsSafeExecutorErrors() {
+            assertTrue(Errors.isToolErrorResult("Error: unknown tool \"x\""));
+            assertTrue(Errors.isToolErrorResult("Error executing read: file not found"));
+            assertFalse(Errors.isToolErrorResult("ok"));
+            assertFalse(Errors.isToolErrorResult(""));
+            assertFalse(Errors.isToolErrorResult(null));
+        }
+    }
 }

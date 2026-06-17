@@ -9,6 +9,7 @@ import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.OutputTokenLimits;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.Tool;
+import com.aicode.agent.llm.ToolResultBlock;
 import com.aicode.agent.llm.ToolUseBlock;
 import com.aicode.app.event.AgentEvent;
 import com.aicode.app.event.AgentEventListener;
@@ -168,6 +169,7 @@ public final class Agent {
     ) {
         return CompletableFuture.supplyAsync(() -> {
             StringBuilder accumulated = new StringBuilder();
+            boolean[] streamedText = {false};
             java.util.concurrent.atomic.AtomicReference<ChatResponse> responseRef =
                     new java.util.concurrent.atomic.AtomicReference<>();
             try {
@@ -176,9 +178,11 @@ public final class Agent {
                         trackPartial(config, accumulated.toString());
                         throw new RunCancelledException(accumulated.toString());
                     }
-                    if ("text_delta".equals(event.type()) && event.text() != null) {
+                    if ("text_delta".equals(event.type()) && event.text() != null && !event.text().isEmpty()) {
                         accumulated.append(event.text());
                         trackPartial(config, accumulated.toString());
+                        listener.onEvent(new AgentEvent.TextDelta(event.text()));
+                        streamedText[0] = true;
                     }
                     if ("message_stop".equals(event.type())) {
                         if (event.response() != null) {
@@ -204,8 +208,9 @@ public final class Agent {
                         Map.of("input_tokens", 0, "output_tokens", 0)
                 );
             }
-            return response;
-        }).thenCompose(response -> {
+            return new StreamCapture(response, accumulated.toString(), streamedText[0]);
+        }).thenCompose(capture -> {
+            ChatResponse response = capture.response();
             if (shouldRetryOutput(config, response, outputRetryAttempt)) {
                 int currentLimit = config.outputLimits().limitForAttempt(outputRetryAttempt);
                 int nextLimit = config.outputLimits().limitForAttempt(outputRetryAttempt + 1);
@@ -219,12 +224,18 @@ public final class Agent {
                         iteration, listener, outputRetryAttempt + 1, baseSize
                 );
             }
-            String text = response.text() != null && !response.text().isBlank()
-                    ? response.text()
-                    : accumulatedText(response);
-            if (!text.isEmpty()) {
-                listener.onEvent(new AgentEvent.TextDelta(text));
-                listener.onEvent(new AgentEvent.TextDone(text));
+            if (capture.streamedText()) {
+                if (!capture.fullText().isEmpty()) {
+                    listener.onEvent(new AgentEvent.TextDone(capture.fullText()));
+                }
+            } else {
+                String text = response.text() != null && !response.text().isBlank()
+                        ? response.text()
+                        : accumulatedText(response);
+                if (!text.isEmpty()) {
+                    listener.onEvent(new AgentEvent.TextDelta(text));
+                    listener.onEvent(new AgentEvent.TextDone(text));
+                }
             }
             return handleResponse(
                     config, messages, toolCalls, totalInput, totalOutput,
@@ -242,6 +253,38 @@ public final class Agent {
             }
             return CompletableFuture.failedFuture(error);
         });
+    }
+
+    private record StreamCapture(ChatResponse response, String fullText, boolean streamedText) {}
+
+    private static ToolResultBlock toolResultBlock(String toolUseId, String result) {
+        return LLMHelpers.createToolResult(toolUseId, result, Errors.isToolErrorResult(result));
+    }
+
+    private static CompletableFuture<AgentResult> emptyToolUseFuture(
+            AgentConfig config,
+            List<ToolCallRecord> toolCalls,
+            int[] totalInput,
+            int[] totalOutput,
+            int iteration,
+            AgentEventListener listener,
+            List<Message> messages,
+            int baseSize
+    ) {
+        String errorMsg = "Tool call failed: the model requested tools but none could be parsed.";
+        if (listener != null) {
+            listener.onEvent(new AgentEvent.Error(errorMsg, "TOOL_PARSE_ERROR"));
+        }
+        emitDone(listener, iteration + 1, totalInput[0], totalOutput[0]);
+        return CompletableFuture.completedFuture(result(
+                errorMsg,
+                toolCalls,
+                iteration + 1,
+                totalInput[0],
+                totalOutput[0],
+                messages,
+                baseSize
+        ));
     }
 
     private static String accumulatedText(ChatResponse response) {
@@ -313,6 +356,11 @@ public final class Agent {
         }
 
         List<ToolUseBlock> uses = LLMHelpers.extractToolUses(response.content());
+        if (uses.isEmpty()) {
+            return emptyToolUseFuture(
+                    config, toolCalls, totalInput, totalOutput, iteration, listener, messages, baseSize
+            );
+        }
         messages.add(Message.assistant(new ArrayList<>(response.content())));
 
         CompletableFuture<List<ContentBlock>> resultsFuture;
@@ -331,7 +379,7 @@ public final class Agent {
                             String result = resultFutures.get(i).join();
                             ToolUseBlock use = uses.get(i);
                             toolCalls.add(new ToolCallRecord(use.name(), use.input(), result));
-                            results.add(LLMHelpers.createToolResult(use.id(), result));
+                            results.add(toolResultBlock(use.id(), result));
                         }
                         return results;
                     });
@@ -348,7 +396,7 @@ public final class Agent {
                             .execute(use.name(), use.input())
                             .thenApply(result -> {
                                 toolCalls.add(new ToolCallRecord(use.name(), use.input(), result));
-                                results.add(LLMHelpers.createToolResult(use.id(), result));
+                                results.add(toolResultBlock(use.id(), result));
                                 return results;
                             });
                 });

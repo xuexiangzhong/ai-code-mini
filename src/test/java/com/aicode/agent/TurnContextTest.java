@@ -45,6 +45,25 @@ class TurnContextTest {
     }
 
     @Test
+    void injectsMatchingGlobRulesForActiveFile() throws Exception {
+        Path rules = workspace.resolve(".cursor/rules");
+        java.nio.file.Files.createDirectories(rules);
+        java.nio.file.Files.writeString(rules.resolve("java.mdc"), """
+                ---
+                globs: **/*.java
+                ---
+                Prefer var for locals.
+                """);
+        Path javaFile = workspace.resolve("src/Foo.java");
+        java.nio.file.Files.createDirectories(javaFile.getParent());
+        java.nio.file.Files.writeString(javaFile, "class Foo {}");
+
+        String block = TurnContext.of(workspace, javaFile).formatDynamicEnvironmentBlock();
+        assertTrue(block.contains("<active-rules>"));
+        assertTrue(block.contains("Prefer var for locals"));
+    }
+
+    @Test
     void limitGitStatusTruncatesLongOutput() {
         String manyLines = String.join("\n", java.util.stream.IntStream.range(0, 30)
                 .mapToObj(i -> " M file" + i + ".java")

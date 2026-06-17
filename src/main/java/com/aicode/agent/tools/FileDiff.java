@@ -6,7 +6,43 @@ import java.util.Objects;
 
 /** Unified diff text for file edits (used by write_file and search_replace). */
 public final class FileDiff {
+    public record ChangeStats(int additions, int deletions) {
+        public boolean hasChanges() {
+            return additions > 0 || deletions > 0;
+        }
+
+        public String summary() {
+            if (!hasChanges()) {
+                return "(no changes)";
+            }
+            return "+" + additions + " -" + deletions + " lines changed";
+        }
+    }
+
     private FileDiff() {}
+
+    public static ChangeStats countChanges(String oldContent, String newContent) {
+        String[] oldLines = oldContent.split("\n", -1);
+        String[] newLines = newContent.split("\n", -1);
+        int maxLen = Math.max(oldLines.length, newLines.length);
+        int additions = 0;
+        int deletions = 0;
+
+        for (int i = 0; i < maxLen; i++) {
+            String oldLine = i < oldLines.length ? oldLines[i] : null;
+            String newLine = i < newLines.length ? newLines[i] : null;
+            if (Objects.equals(oldLine, newLine)) {
+                continue;
+            }
+            if (oldLine != null) {
+                deletions++;
+            }
+            if (newLine != null) {
+                additions++;
+            }
+        }
+        return new ChangeStats(additions, deletions);
+    }
 
     public static String generate(String oldContent, String newContent, String filePath) {
         String[] oldLines = oldContent.split("\n", -1);

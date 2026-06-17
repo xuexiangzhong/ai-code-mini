@@ -144,6 +144,8 @@ public class OpenAICompatibleProvider implements LLMProvider {
                 StringBuilder textContent = new StringBuilder();
                 Map<Integer, ToolCallAccumulator> toolCalls = new HashMap<>();
                 String finishReason = "stop";
+                int inputTokens = 0;
+                int outputTokens = 0;
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(response.body().byteStream(), StandardCharsets.UTF_8))) {
                     String line;
@@ -159,6 +161,11 @@ public class OpenAICompatibleProvider implements LLMProvider {
                             break;
                         }
                         JsonNode chunk = MAPPER.readTree(data);
+                        JsonNode usage = chunk.path("usage");
+                        if (!usage.isMissingNode() && !usage.isNull()) {
+                            inputTokens = usage.path("prompt_tokens").asInt(inputTokens);
+                            outputTokens = usage.path("completion_tokens").asInt(outputTokens);
+                        }
                         JsonNode choices = chunk.path("choices");
                         if (!choices.isArray() || choices.isEmpty()) {
                             continue;
@@ -192,7 +199,9 @@ public class OpenAICompatibleProvider implements LLMProvider {
                         }
                     }
                 }
-                ChatResponse assembled = buildStreamResponse(textContent.toString(), toolCalls, finishReason);
+                ChatResponse assembled = buildStreamResponse(
+                        textContent.toString(), toolCalls, finishReason, inputTokens, outputTokens
+                );
                 consumer.accept(new StreamEvent("message_stop", textContent.toString(), assembled));
             }
         } catch (IOException e) {
@@ -203,7 +212,9 @@ public class OpenAICompatibleProvider implements LLMProvider {
     private ChatResponse buildStreamResponse(
             String text,
             Map<Integer, ToolCallAccumulator> toolCalls,
-            String finishReason
+            String finishReason,
+            int inputTokens,
+            int outputTokens
     ) throws IOException {
         List<ContentBlock> contentBlocks = new ArrayList<>();
         if (!text.isEmpty()) {
@@ -238,7 +249,7 @@ public class OpenAICompatibleProvider implements LLMProvider {
                 contentBlocks,
                 text,
                 stopReason,
-                Map.of("input_tokens", 0, "output_tokens", 0)
+                Map.of("input_tokens", inputTokens, "output_tokens", outputTokens)
         );
     }
 
@@ -290,12 +301,14 @@ public class OpenAICompatibleProvider implements LLMProvider {
     }
 
     private static String resolveStopReason(String finishReason, boolean hasValidToolCalls) {
-        if ("tool_calls".equals(finishReason) && hasValidToolCalls) {
+        if (hasValidToolCalls && "tool_calls".equals(finishReason)) {
             return "tool_use";
         }
-        return switch (finishReason) {
-            case "stop" -> "end_turn";
-            default -> "max_tokens";
+        return switch (finishReason != null ? finishReason : "") {
+            case "stop", "" -> "end_turn";
+            case "length" -> "max_tokens";
+            case "tool_calls" -> "end_turn";
+            default -> "end_turn";
         };
     }
 

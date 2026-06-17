@@ -5,7 +5,9 @@ import com.aicode.agent.Context;
 import com.aicode.agent.Errors;
 import com.aicode.agent.PromptFactory;
 import com.aicode.agent.Safety;
+import com.aicode.agent.SkillContext;
 import com.aicode.agent.TaskManager;
+import com.aicode.agent.ToolOutputLimiter;
 import com.aicode.agent.index.CodebaseIndexManager;
 import com.aicode.agent.llm.ChatOptions;
 import com.aicode.agent.llm.EmbeddingProvider;
@@ -15,6 +17,7 @@ import com.aicode.agent.llm.Tool;
 import com.aicode.app.event.AgentEvent;
 import com.aicode.app.session.FileEditProposal;
 import com.aicode.app.approval.ApprovalGate;
+import com.aicode.app.approval.FileEditGate;
 import com.aicode.app.config.AppConfig;
 import com.aicode.app.event.AgentEventListener;
 
@@ -63,9 +66,8 @@ public final class AgentApplication {
         this.taskManager = new TaskManager();
         this.scratchpad = new Context.Scratchpad();
         this.tools = buildTools();
-        this.sandbox = new Safety.FileSystemSandbox(
-                List.of(config.workspace().toString(), System.getProperty("java.io.tmpdir"))
-        );
+        List<String> allowedPaths = SkillContext.toolSandboxRoots(config.workspace());
+        this.sandbox = new Safety.FileSystemSandbox(allowedPaths);
         int promptBudget = PromptFactory.systemPromptBudget(config.contextWindow());
         this.systemPrompt = PromptFactory.buildAgentPrompt(config.workspace(), tools, promptBudget);
         this.chatSystemPrompt = PromptFactory.buildChatPrompt();
@@ -129,6 +131,14 @@ public final class AgentApplication {
     }
 
     public Agent.ToolExecutor createToolExecutor(ApprovalGate approvalGate, AgentEventListener listener) {
+        return createToolExecutor(approvalGate, null, listener);
+    }
+
+    public Agent.ToolExecutor createToolExecutor(
+            ApprovalGate approvalGate,
+            FileEditGate fileEditGate,
+            AgentEventListener listener
+    ) {
         java.util.function.Consumer<FileEditProposal> onFileEdit = proposal -> {
             if (listener != null) {
                 listener.onEvent(new AgentEvent.FileEditProposed(
@@ -147,6 +157,7 @@ public final class AgentApplication {
                 taskManager,
                 scratchpad,
                 approvalGate,
+                fileEditGate,
                 onFileEdit,
                 embeddingProvider()
         );
@@ -155,7 +166,7 @@ public final class AgentApplication {
         for (Tool tool : tools) {
             knownTools.add(tool.name());
         }
-        return Errors.safeToolExecutor(emitting, knownTools);
+        return ToolOutputLimiter.wrap(Errors.safeToolExecutor(emitting, knownTools));
     }
 
     public Agent.AgentConfig toAgentConfig(Agent.ToolExecutor toolExecutor) {

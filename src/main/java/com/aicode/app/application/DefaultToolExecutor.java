@@ -15,6 +15,7 @@ import com.aicode.agent.tools.SearchReplaceTool;
 import com.aicode.agent.tools.SemanticSearchTool;
 import com.aicode.agent.tools.WriteTool;
 import com.aicode.app.approval.ApprovalGate;
+import com.aicode.app.approval.FileEditGate;
 import com.aicode.app.session.FileEditProposal;
 
 import java.io.IOException;
@@ -22,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -29,10 +31,14 @@ import java.util.function.Consumer;
  * Core tool execution with sandbox and safety checks (no UI side effects).
  */
 public final class DefaultToolExecutor implements Agent.ToolExecutor {
+    private static final String REJECTED_SUFFIX =
+            "\n\n⚠️ 用户撤销了此文件改动，变更已回滚。请不要假设该文件已被修改。";
+
     private final WorkspaceGuard guard;
     private final TaskManager taskManager;
     private final Context.Scratchpad scratchpad;
     private final ApprovalGate approvalGate;
+    private final FileEditGate fileEditGate;
     private final Consumer<FileEditProposal> fileEditListener;
     private final EmbeddingProvider embeddingProvider;
 
@@ -42,7 +48,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
             TaskManager taskManager,
             Context.Scratchpad scratchpad
     ) {
-        this(workspace, sandbox, taskManager, scratchpad, null, null, null);
+        this(workspace, sandbox, taskManager, scratchpad, null, null, null, null);
     }
 
     public DefaultToolExecutor(
@@ -52,7 +58,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
             Context.Scratchpad scratchpad,
             ApprovalGate approvalGate
     ) {
-        this(workspace, sandbox, taskManager, scratchpad, approvalGate, null, null);
+        this(workspace, sandbox, taskManager, scratchpad, approvalGate, null, null, null);
     }
 
     public DefaultToolExecutor(
@@ -61,6 +67,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
             TaskManager taskManager,
             Context.Scratchpad scratchpad,
             ApprovalGate approvalGate,
+            FileEditGate fileEditGate,
             Consumer<FileEditProposal> fileEditListener,
             EmbeddingProvider embeddingProvider
     ) {
@@ -68,6 +75,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
         this.taskManager = taskManager;
         this.scratchpad = scratchpad;
         this.approvalGate = approvalGate;
+        this.fileEditGate = fileEditGate;
         this.fileEditListener = fileEditListener;
         this.embeddingProvider = embeddingProvider;
     }
@@ -144,10 +152,10 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
     private CompletableFuture<String> runTool(String name, Map<String, Object> input) {
         try {
             if ("write_file".equals(name)) {
-                return CompletableFuture.completedFuture(runWriteFile(input));
+                return runWriteFile(input);
             }
             if ("search_replace".equals(name)) {
-                return CompletableFuture.completedFuture(runSearchReplace(input));
+                return runSearchReplace(input);
             }
             String result = switch (name) {
                 case "read_file" -> ReadTool.execute(ReadTool.Input.fromMap(input));
@@ -166,44 +174,74 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
         }
     }
 
-    private String runWriteFile(Map<String, Object> input) {
+    private CompletableFuture<String> runWriteFile(Map<String, Object> input) {
         Path path = Path.of(String.valueOf(input.get("file_path")));
         String oldContent = readStringIfExists(path);
         boolean created = oldContent == null;
         String result = WriteTool.execute(WriteTool.Input.fromMap(input));
-        if (!result.startsWith("Error:")) {
-            notifyFileEdit(path, oldContent, readStringIfExists(path), created, result);
+        if (result.startsWith("Error:")) {
+            return CompletableFuture.completedFuture(result);
         }
-        return result;
+        Optional<FileEditProposal> proposal = buildProposal(path, oldContent, created, result);
+        notifyFileEdit(proposal);
+        return finalizeFileEdit(proposal, result);
     }
 
-    private String runSearchReplace(Map<String, Object> input) {
+    private CompletableFuture<String> runSearchReplace(Map<String, Object> input) {
         Path path = Path.of(String.valueOf(input.get("file_path")));
         String oldContent = readStringIfExists(path);
         String result = SearchReplaceTool.execute(SearchReplaceTool.Input.fromMap(input));
-        if (!result.startsWith("Error:") && result.contains("Updated")) {
-            notifyFileEdit(path, oldContent, readStringIfExists(path), false, result);
+        if (result.startsWith("Error:") || !result.contains("Updated")) {
+            return CompletableFuture.completedFuture(result);
         }
-        return result;
+        Optional<FileEditProposal> proposal = buildProposal(path, oldContent, false, result);
+        notifyFileEdit(proposal);
+        return finalizeFileEdit(proposal, result);
     }
 
-    private void notifyFileEdit(
+    private Optional<FileEditProposal> buildProposal(
             Path path,
             String oldContent,
-            String newContent,
             boolean created,
             String result
     ) {
-        if (fileEditListener == null || newContent == null) {
-            return;
+        if (fileEditListener == null && fileEditGate == null) {
+            return Optional.empty();
+        }
+        String newContent = readStringIfExists(path);
+        if (newContent == null) {
+            return Optional.empty();
         }
         if (created && result.contains("(no changes)")) {
-            return;
+            return Optional.empty();
         }
         if (!created && oldContent != null && oldContent.equals(newContent)) {
+            return Optional.empty();
+        }
+        return Optional.of(FileEditProposal.create(path, oldContent, newContent, created));
+    }
+
+    private void notifyFileEdit(Optional<FileEditProposal> proposal) {
+        if (proposal.isEmpty() || fileEditListener == null) {
             return;
         }
-        fileEditListener.accept(FileEditProposal.create(path, oldContent, newContent, created));
+        FileEditProposal edit = proposal.get();
+        if (fileEditGate == null || fileEditGate.needsReview(edit.filePath())) {
+            fileEditListener.accept(edit);
+        }
+    }
+
+    private CompletableFuture<String> finalizeFileEdit(Optional<FileEditProposal> proposal, String result) {
+        if (fileEditGate == null || proposal.isEmpty()) {
+            return CompletableFuture.completedFuture(result);
+        }
+        FileEditProposal edit = proposal.get();
+        if (!fileEditGate.needsReview(edit.filePath())) {
+            return CompletableFuture.completedFuture(result);
+        }
+        return fileEditGate.awaitReview(edit).thenApply(kept ->
+                kept ? result : result + REJECTED_SUFFIX
+        );
     }
 
     private static String readStringIfExists(Path path) {

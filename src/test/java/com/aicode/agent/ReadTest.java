@@ -74,19 +74,17 @@ class ReadTest {
         @Test
         void limit() {
             String result = ReadTool.execute(new ReadTool.Input(sampleTxt.toString(), 1, 3));
-            String[] lines = result.split("\n");
-            assertEquals(3, lines.length);
-            assertTrue(lines[0].contains("Line 1: content"));
-            assertTrue(lines[2].contains("Line 3: content"));
+            assertEquals(3, result.lines().filter(line -> !line.startsWith("…")).count());
+            assertTrue(result.contains("Line 1: content"));
+            assertTrue(result.contains("Line 3: content"));
         }
 
         @Test
         void offsetAndLimit() {
             String result = ReadTool.execute(new ReadTool.Input(sampleTxt.toString(), 10, 5));
-            String[] lines = result.split("\n");
-            assertEquals(5, lines.length);
-            assertTrue(lines[0].contains("Line 10: content"));
-            assertTrue(lines[4].contains("Line 14: content"));
+            assertEquals(5, result.lines().filter(line -> !line.startsWith("…")).count());
+            assertTrue(result.contains("Line 10: content"));
+            assertTrue(result.contains("Line 14: content"));
         }
 
         @Test
@@ -117,6 +115,21 @@ class ReadTest {
         void invalidOffset() {
             String result = ReadTool.execute(new ReadTool.Input(sampleTxt.toString(), 0, null));
             assertTrue(result.contains("Error: offset must be >= 1"));
+        }
+
+        @Test
+        void defaultLimitTruncatesLargeFiles() throws IOException {
+            StringBuilder lines = new StringBuilder();
+            for (int i = 0; i < 300; i++) {
+                lines.append("Line ").append(i + 1).append("\n");
+            }
+            Path large = testDir.resolve("large.txt");
+            Files.writeString(large, lines.toString());
+
+            String result = ReadTool.execute(new ReadTool.Input(large.toString(), 1, null));
+            assertTrue(result.contains("Line 250"));
+            assertFalse(result.contains("\t251\tLine 251"));
+            assertTrue(result.contains("300 total"));
         }
     }
 }
