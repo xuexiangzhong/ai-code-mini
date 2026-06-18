@@ -50,6 +50,7 @@ public final class AgentSessionBinder {
     private StreamingChatAppender streamingChat;
     private ModelProfile activeModel;
     private Consumer<String> toolLogConsumer;
+    private Consumer<Path> onFileDiskChanged = path -> {};
 
     public AgentSessionBinder(
             Path workspaceRoot,
@@ -114,6 +115,10 @@ public final class AgentSessionBinder {
 
     public void setOnFileEditChanged(Consumer<Path> onFileEditChanged) {
         chatView.setOnFileEditChanged(onFileEditChanged);
+    }
+
+    public void setOnFileDiskChanged(Consumer<Path> onFileDiskChanged) {
+        this.onFileDiskChanged = onFileDiskChanged != null ? onFileDiskChanged : path -> {};
     }
 
     public void setToolLogConsumer(Consumer<String> toolLogConsumer) {
@@ -332,7 +337,8 @@ public final class AgentSessionBinder {
                     }
                 },
                 (event, onComplete) -> showApproval(context, event, onComplete),
-                proposal -> chatView.showFileEditReview(proposal)
+                proposal -> chatView.showFileEditReview(proposal),
+                onFileDiskChanged
         ));
         return context;
     }

@@ -141,13 +141,15 @@ public final class AgentApplication {
     ) {
         java.util.function.Consumer<FileEditProposal> onFileEdit = proposal -> {
             if (listener != null) {
+                boolean requiresReview = fileEditGate == null || fileEditGate.needsReview(proposal.filePath());
                 listener.onEvent(new AgentEvent.FileEditProposed(
                         proposal.id(),
                         proposal.filePath().toString(),
                         proposal.oldContent(),
                         proposal.newContent(),
                         proposal.created(),
-                        proposal.diffText()
+                        proposal.diffText(),
+                        requiresReview
                 ));
             }
         };

@@ -22,6 +22,7 @@ public final class WorkspaceFileTreeRefresher {
     private Map<Path, DirectorySnapshot.Entry> lastSnapshot = Map.of();
     private Timeline autoRefreshTimeline;
     private volatile boolean refreshInProgress;
+    private Runnable onAfterRefresh = () -> {};
 
     public WorkspaceFileTreeRefresher(
             TreeView<String> tree,
@@ -40,6 +41,10 @@ public final class WorkspaceFileTreeRefresher {
         lastSnapshot = Map.of();
     }
 
+    public void setOnAfterRefresh(Runnable onAfterRefresh) {
+        this.onAfterRefresh = onAfterRefresh != null ? onAfterRefresh : () -> {};
+    }
+
     public void refresh() {
         if (workspace == null || refreshInProgress) {
             return;
@@ -48,6 +53,7 @@ public final class WorkspaceFileTreeRefresher {
         WorkspaceFileTree.refreshAsync(tree, workspace, onFileDoubleClicked, () -> {
             refreshInProgress = false;
             lastSnapshot = DirectorySnapshot.capture(tree, workspace);
+            onAfterRefresh.run();
         });
     }
 

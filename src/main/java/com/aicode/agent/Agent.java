@@ -117,7 +117,10 @@ public final class Agent {
             int baseSize
     ) {
         if (isCancelled(config)) {
-            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
+            return cancelledFuture(
+                    config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize,
+                    toolCalls.size()
+            );
         }
 
         if (iteration >= config.maxIterations()) {
@@ -245,7 +248,8 @@ public final class Agent {
             RunCancelledException cancelled = findCancelled(error);
             if (cancelled != null) {
                 return cancelledFuture(
-                        config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
+                        config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize,
+                        toolCalls.size()
                 );
             }
             if (error instanceof RuntimeException runtime) {
@@ -352,7 +356,10 @@ public final class Agent {
         }
 
         if (isCancelled(config)) {
-            return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
+            return cancelledFuture(
+                    config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize,
+                    toolCalls.size()
+            );
         }
 
         List<ToolUseBlock> uses = LLMHelpers.extractToolUses(response.content());
@@ -362,13 +369,17 @@ public final class Agent {
             );
         }
         messages.add(Message.assistant(new ArrayList<>(response.content())));
+        final int toolCallsBeforeTurn = toolCalls.size();
 
         CompletableFuture<List<ContentBlock>> resultsFuture;
         if (config.parallelToolCalls() && uses.size() > 1) {
             List<CompletableFuture<String>> resultFutures = new ArrayList<>();
             for (ToolUseBlock use : uses) {
                 if (isCancelled(config)) {
-                    return cancelledFuture(config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize);
+                    return cancelledFuture(
+                            config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize,
+                            toolCallsBeforeTurn
+                    );
                 }
                 resultFutures.add(config.executeTool().execute(use.name(), use.input()));
             }
@@ -382,6 +393,34 @@ public final class Agent {
                             results.add(toolResultBlock(use.id(), result));
                         }
                         return results;
+                    });
+            return resultsFuture
+                    .exceptionallyCompose(error -> {
+                        RunCancelledException cancelled = findCancelled(error);
+                        if (cancelled != null) {
+                            appendParallelCancelResults(messages, uses, resultFutures, toolCalls);
+                            return cancelledFuture(
+                                    config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages,
+                                    baseSize, toolCallsBeforeTurn
+                            ).thenApply(r -> List.<ContentBlock>of());
+                        }
+                        if (error instanceof RuntimeException runtime) {
+                            return CompletableFuture.failedFuture(runtime);
+                        }
+                        return CompletableFuture.failedFuture(error);
+                    })
+                    .thenCompose(results -> {
+                        if (isCancelled(config)) {
+                            return cancelledFuture(
+                                    config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages,
+                                    baseSize, toolCallsBeforeTurn
+                            );
+                        }
+                        messages.add(Message.userBlocks(results));
+                        return runIteration(
+                                config, messages, toolCalls, totalInput, totalOutput,
+                                iteration + 1, listener, 0, baseSize
+                        );
                     });
         } else {
             CompletableFuture<List<ContentBlock>> chain = CompletableFuture.completedFuture(new ArrayList<>());
@@ -409,7 +448,8 @@ public final class Agent {
                     RunCancelledException cancelled = findCancelled(error);
                     if (cancelled != null) {
                         return cancelledFuture(
-                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
+                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages,
+                                baseSize, toolCallsBeforeTurn
                         ).thenApply(r -> List.<ContentBlock>of());
                     }
                     if (error instanceof RuntimeException runtime) {
@@ -420,7 +460,8 @@ public final class Agent {
                 .thenCompose(results -> {
                     if (isCancelled(config)) {
                         return cancelledFuture(
-                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages, baseSize
+                                config, toolCalls, totalInput[0], totalOutput[0], iteration, listener, messages,
+                                baseSize, toolCallsBeforeTurn
                         );
                     }
                     messages.add(Message.userBlocks(results));
@@ -429,6 +470,31 @@ public final class Agent {
                             iteration + 1, listener, 0, baseSize
                     );
                 });
+    }
+
+    private static void appendParallelCancelResults(
+            List<Message> messages,
+            List<ToolUseBlock> uses,
+            List<CompletableFuture<String>> resultFutures,
+            List<ToolCallRecord> toolCalls
+    ) {
+        if (ToolMessageRepair.alreadyHasToolResultsForLastAssistant(messages)) {
+            return;
+        }
+        List<ContentBlock> results = new ArrayList<>(uses.size());
+        for (int i = 0; i < uses.size(); i++) {
+            ToolUseBlock use = uses.get(i);
+            CompletableFuture<String> future = resultFutures.get(i);
+            if (future.isDone() && !future.isCompletedExceptionally()) {
+                String result = future.join();
+                toolCalls.add(new ToolCallRecord(use.name(), use.input(), result));
+                results.add(toolResultBlock(use.id(), result));
+            } else {
+                results.add(LLMHelpers.createToolResult(
+                        use.id(), ToolMessageRepair.INCOMPLETE_RESULT, true));
+            }
+        }
+        messages.add(Message.userBlocks(results));
     }
 
     private static boolean isCancelled(AgentConfig config) {
@@ -464,8 +530,10 @@ public final class Agent {
             int iteration,
             AgentEventListener listener,
             List<Message> messages,
-            int baseSize
+            int baseSize,
+            int toolCallsBeforeTurn
     ) {
+        ToolMessageRepair.finalizeCancelledToolTurn(messages, toolCalls, toolCallsBeforeTurn);
         String partial = partialText(config);
         if (listener != null) {
             listener.onEvent(new AgentEvent.Cancelled(partial));

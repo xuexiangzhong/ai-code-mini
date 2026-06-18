@@ -63,12 +63,11 @@ public final class FileEditGate {
         return !pending.isEmpty();
     }
 
-    /** Unblocks an in-flight agent run without reverting already-written files. */
+    /** Unblocks an in-flight agent run and reverts pending file edits (same as rejecting each). */
     public void cancelAll() {
-        for (PendingEdit pendingEdit : pending.values()) {
-            pendingEdit.future().complete(false);
+        for (String editId : new java.util.ArrayList<>(pending.keySet())) {
+            resolve(editId, false);
         }
-        pending.clear();
     }
 
     private static String normalize(Path path) {

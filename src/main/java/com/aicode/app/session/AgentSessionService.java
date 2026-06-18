@@ -6,6 +6,7 @@ import com.aicode.agent.Context;
 import com.aicode.agent.HistoryCompactor;
 import com.aicode.agent.Markdown;
 import com.aicode.agent.MessageHistory;
+import com.aicode.agent.ToolMessageRepair;
 import com.aicode.agent.TurnContext;
 import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.StreamingChatHelper;
@@ -395,17 +396,22 @@ public final class AgentSessionService {
             history.replaceAll(compacted.messages());
             all = compacted.messages();
         }
+        List<Message> repaired = ToolMessageRepair.repair(all);
+        if (ToolMessageRepair.differs(all, repaired)) {
+            history.replaceAll(repaired);
+        }
+        all = repaired;
         int compressThreshold = (int) (messageBudget * 0.65);
 
         if (firstMessageIsSummary(all) && !Compressor.needsCompression(all, compressThreshold)) {
             return CompletableFuture.completedFuture(
-                    TurnContext.injectOnLastUserMessage(Context.selectMessages(all, messageBudget), turnContext)
+                    selectForModel(all, messageBudget, turnContext)
             );
         }
 
         if (!Compressor.needsCompression(all, compressThreshold)) {
             return CompletableFuture.completedFuture(
-                    TurnContext.injectOnLastUserMessage(Context.selectMessages(all, messageBudget), turnContext)
+                    selectForModel(all, messageBudget, turnContext)
             );
         }
 
@@ -435,11 +441,23 @@ public final class AgentSessionService {
                     }
                 }
             }
-            return TurnContext.injectOnLastUserMessage(
-                    Context.selectMessages(history.getMessages(), messageBudget),
-                    turnContext
-            );
+            List<Message> current = ToolMessageRepair.repair(history.getMessages());
+            if (ToolMessageRepair.differs(history.getMessages(), current)) {
+                history.replaceAll(current);
+            }
+            return selectForModel(current, messageBudget, turnContext);
         });
+    }
+
+    private static List<Message> selectForModel(
+            List<Message> messages,
+            int messageBudget,
+            TurnContext turnContext
+    ) {
+        return TurnContext.injectOnLastUserMessage(
+                ToolMessageRepair.repair(Context.selectMessages(messages, messageBudget)),
+                turnContext
+        );
     }
 
     private static boolean firstMessageIsSummary(List<Message> messages) {

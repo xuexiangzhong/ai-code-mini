@@ -41,6 +41,7 @@ public final class AgentWindowSessionManager {
     private final StreamingChatAppender streamingChat;
     private Consumer<Path> onWorkspaceActivated;
     private Runnable onMessageSent;
+    private Consumer<Path> onFileDiskChanged = path -> {};
 
     public AgentWindowSessionManager(
             Supplier<Stage> stageSupplier,
@@ -77,6 +78,10 @@ public final class AgentWindowSessionManager {
 
     public void setOnMessageSent(Runnable onMessageSent) {
         this.onMessageSent = onMessageSent;
+    }
+
+    public void setOnFileDiskChanged(Consumer<Path> onFileDiskChanged) {
+        this.onFileDiskChanged = onFileDiskChanged != null ? onFileDiskChanged : path -> {};
     }
 
     public Path activeWorkspacePath() {
@@ -373,7 +378,8 @@ public final class AgentWindowSessionManager {
                 text -> appendStreamToConversation(conversation, text),
                 text -> appendActivity(conversation, text),
                 (event, onComplete) -> showApproval(conversation, event, onComplete),
-                chatView::showFileEditReview
+                chatView::showFileEditReview,
+                onFileDiskChanged
         );
     }
 

@@ -14,6 +14,7 @@
   <script>
     var editor = null;
     var dirty = false;
+    var suppressDirty = false;
 
     require.config({ paths: { vs: 'vs' } });
 
@@ -34,20 +35,28 @@
         insertSpaces: true
       });
       editor.onDidChangeModelContent(function () {
+        if (suppressDirty) {
+          return;
+        }
         dirty = true;
         if (window.javaBridge && window.javaBridge.onDirty) {
           window.javaBridge.onDirty();
         }
       });
+      if (window.javaBridge && window.javaBridge.onEditorReady) {
+        window.javaBridge.onEditorReady();
+      }
     });
 
     function setContent(text, language) {
       if (!editor) return;
+      suppressDirty = true;
       editor.setValue(text || '');
       if (language) {
         monaco.editor.setModelLanguage(editor.getModel(), language);
       }
       dirty = false;
+      suppressDirty = false;
     }
 
     function getContent() {

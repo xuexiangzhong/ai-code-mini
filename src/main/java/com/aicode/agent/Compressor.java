@@ -96,7 +96,7 @@ public final class Compressor {
             ));
         }
 
-        int splitIndex = messages.size() - config.keepRecentMessages();
+        int splitIndex = safeSplitIndex(messages, config.keepRecentMessages());
         List<Message> oldMessages = messages.subList(0, splitIndex);
         List<Message> recentMessages = messages.subList(splitIndex, messages.size());
 
@@ -119,5 +119,23 @@ public final class Compressor {
     public static boolean needsCompression(List<Message> messages, int maxTokens) {
         int total = messages.stream().mapToInt(TokenCounter::estimateMessageTokens).sum();
         return total > maxTokens;
+    }
+
+    static int safeSplitIndex(List<Message> messages, int keepRecentMessages) {
+        int target = Math.max(0, messages.size() - keepRecentMessages);
+        while (target > 0 && wouldSplitToolTurn(messages, target)) {
+            target--;
+        }
+        return target;
+    }
+
+    static boolean wouldSplitToolTurn(List<Message> messages, int splitIndex) {
+        if (splitIndex <= 0 || splitIndex >= messages.size()) {
+            return false;
+        }
+        if (ToolMessageRepair.isToolResultUser(messages.get(splitIndex))) {
+            return true;
+        }
+        return ToolMessageRepair.isToolUseAssistant(messages.get(splitIndex - 1));
     }
 }

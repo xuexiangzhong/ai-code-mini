@@ -1,5 +1,7 @@
 package com.aicode.app.ui.pane;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
 import javafx.scene.control.ContextMenu;
@@ -17,6 +19,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.Scene;
 import javafx.scene.web.WebEngine;
 import javafx.scene.web.WebView;
+import javafx.util.Duration;
 import netscape.javascript.JSObject;
 
 import java.net.URL;
@@ -28,6 +31,8 @@ public final class EditorPane extends StackPane {
     private final WebEngine engine = webView.getEngine();
     private volatile boolean ready;
     private Runnable onDirty;
+    private Timeline dirtyPoller;
+    private volatile boolean jsDirtyReported;
 
     public EditorPane() {
         getChildren().add(webView);
@@ -202,14 +207,55 @@ public final class EditorPane extends StackPane {
         this.onDirty = onDirty;
     }
 
+    /** Poll Monaco's isDirty() because WebView javaBridge callbacks are unreliable on some platforms. */
+    public void startDirtyPolling() {
+        if (dirtyPoller != null) {
+            return;
+        }
+        dirtyPoller = new Timeline(new KeyFrame(Duration.millis(350), event -> pollEditorDirty()));
+        dirtyPoller.setCycleCount(Timeline.INDEFINITE);
+        dirtyPoller.play();
+    }
+
+    public void stopDirtyPolling() {
+        if (dirtyPoller != null) {
+            dirtyPoller.stop();
+            dirtyPoller = null;
+        }
+    }
+
+    private void pollEditorDirty() {
+        if (!ready || onDirty == null) {
+            return;
+        }
+        try {
+            Object result = engine.executeScript("typeof isDirty === 'function' && isDirty()");
+            boolean dirty = Boolean.TRUE.equals(result);
+            if (dirty && !jsDirtyReported) {
+                jsDirtyReported = true;
+                Platform.runLater(onDirty);
+            } else if (!dirty) {
+                jsDirtyReported = false;
+            }
+        } catch (Exception ignored) {
+            // editor not ready yet
+        }
+    }
+
     private void installBridge() {
         JSObject window = (JSObject) engine.executeScript("window");
         window.setMember("javaBridge", new Object() {
             @SuppressWarnings("unused")
             public void onDirty() {
                 if (onDirty != null) {
+                    jsDirtyReported = true;
                     Platform.runLater(onDirty);
                 }
+            }
+
+            @SuppressWarnings("unused")
+            public void onEditorReady() {
+                jsDirtyReported = false;
             }
         });
     }
@@ -220,6 +266,7 @@ public final class EditorPane extends StackPane {
                     "setContent(" + jsString(content) + "," + jsString(language) + ");"
             );
             engine.executeScript("focusEditor();");
+            jsDirtyReported = false;
         });
     }
 
@@ -250,7 +297,10 @@ public final class EditorPane extends StackPane {
     }
 
     public void markClean() {
-        whenReady(() -> engine.executeScript("markClean();"));
+        whenReady(() -> {
+            engine.executeScript("markClean();");
+            jsDirtyReported = false;
+        });
     }
 
     private void whenReady(Runnable action) {

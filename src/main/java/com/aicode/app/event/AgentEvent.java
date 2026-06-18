@@ -29,7 +29,8 @@ public sealed interface AgentEvent permits
             String oldContent,
             String newContent,
             boolean created,
-            String diff
+            String diff,
+            boolean requiresReview
     ) implements AgentEvent {}
 
     record ApprovalRequired(

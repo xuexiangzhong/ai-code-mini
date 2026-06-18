@@ -111,6 +111,7 @@ public final class AgentsWindowController {
         );
         sessionManager.setOnWorkspaceActivated(this::onWorkspaceActivated);
         sessionManager.setOnMessageSent(this::collapseEditorToStrip);
+        sessionManager.setOnFileDiskChanged(this::reloadEditedFile);
         sessionManager.bindSidebarNav(sidebarNav);
         sessionManager.initializeModes();
 
@@ -134,6 +135,7 @@ public final class AgentsWindowController {
                 () -> filePanelVisible && activeWorkspace != null
         );
         refreshFileTreeButton.setOnAction(e -> fileTreeRefresher.refresh());
+        fileTreeRefresher.setOnAfterRefresh(() -> Platform.runLater(this::reloadOpenEditorFilesFromDisk));
         closeFilePanelButton.setOnAction(e -> hideFilePanel());
         toggleFilePanelButton.setOnAction(e -> {
             if (filePanelVisible) {
@@ -185,7 +187,14 @@ public final class AgentsWindowController {
 
     private void initEditorTabs(Path workspace) {
         editorTabs = new EditorTabManager(workspaceGuard(workspace));
+        editorTabs.setDialogOwner(() -> {
+            if (sendButton.getScene() != null && sendButton.getScene().getWindow() instanceof Stage stage) {
+                return stage;
+            }
+            return null;
+        });
         editorTabs.setOnStatus(msg -> footerLabel.setText(msg));
+        editorTabs.setOnDirtyChanged(this::updateSaveButtonDirtyState);
         editorTabs.setOnAllTabsClosed(this::hideEditorDock);
         VBox.setVgrow(editorTabs, Priority.ALWAYS);
         agentEditorHost.getChildren().setAll(editorTabs);
@@ -377,6 +386,25 @@ public final class AgentsWindowController {
                 Platform.runLater(() -> editorTabs.reloadFile(path, content));
             } catch (IOException ignored) {
                 // ignore reload errors
+            }
+        });
+    }
+
+    private void reloadOpenEditorFilesFromDisk() {
+        if (editorTabs != null) {
+            editorTabs.reloadAllOpenFilesFromDisk();
+        }
+    }
+
+    private void updateSaveButtonDirtyState(boolean dirty) {
+        Platform.runLater(() -> {
+            saveFileButton.setText(dirty ? "保存 *" : "保存");
+            if (dirty) {
+                if (!saveFileButton.getStyleClass().contains("agent-editor-dock-action-dirty")) {
+                    saveFileButton.getStyleClass().add("agent-editor-dock-action-dirty");
+                }
+            } else {
+                saveFileButton.getStyleClass().remove("agent-editor-dock-action-dirty");
             }
         });
     }

@@ -14,6 +14,7 @@ public final class UiAgentBridge implements AgentEventListener {
     private final Consumer<String> activityAppender;
     private final BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler;
     private final Consumer<FileEditProposal> fileEditHandler;
+    private final Consumer<Path> onFileDiskChanged;
     private final StringBuilder streaming = new StringBuilder();
 
     public UiAgentBridge(
@@ -21,7 +22,7 @@ public final class UiAgentBridge implements AgentEventListener {
             Consumer<String> activityAppender,
             BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler
     ) {
-        this(streamAppender, activityAppender, approvalHandler, null);
+        this(streamAppender, activityAppender, approvalHandler, null, null);
     }
 
     public UiAgentBridge(
@@ -30,10 +31,21 @@ public final class UiAgentBridge implements AgentEventListener {
             BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler,
             Consumer<FileEditProposal> fileEditHandler
     ) {
+        this(streamAppender, activityAppender, approvalHandler, fileEditHandler, null);
+    }
+
+    public UiAgentBridge(
+            Consumer<String> streamAppender,
+            Consumer<String> activityAppender,
+            BiConsumer<AgentEvent.ApprovalRequired, Runnable> approvalHandler,
+            Consumer<FileEditProposal> fileEditHandler,
+            Consumer<Path> onFileDiskChanged
+    ) {
         this.streamAppender = streamAppender;
         this.activityAppender = activityAppender;
         this.approvalHandler = approvalHandler;
         this.fileEditHandler = fileEditHandler;
+        this.onFileDiskChanged = onFileDiskChanged;
     }
 
     @Override
@@ -55,7 +67,10 @@ public final class UiAgentBridge implements AgentEventListener {
                     activityAppender.accept("✔ " + e.toolName() + " (" + e.durationMs() + "ms)");
             case AgentEvent.FileEditProposed e -> {
                 activityAppender.accept("📝 " + Path.of(e.filePath()).getFileName());
-                if (fileEditHandler != null) {
+                if (onFileDiskChanged != null) {
+                    onFileDiskChanged.accept(Path.of(e.filePath()));
+                }
+                if (e.requiresReview() && fileEditHandler != null) {
                     fileEditHandler.accept(new FileEditProposal(
                             e.editId(),
                             Path.of(e.filePath()),

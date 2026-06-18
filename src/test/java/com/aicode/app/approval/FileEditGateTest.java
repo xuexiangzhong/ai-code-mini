@@ -60,6 +60,21 @@ class FileEditGateTest {
     }
 
     @Test
+    void cancelAllRevertsPendingEdits(@TempDir Path workspace) throws Exception {
+        Path file = workspace.resolve("demo.txt");
+        Files.writeString(file, "new");
+        FileEditProposal proposal = FileEditProposal.create(file, "old", "new", false);
+        FileEditGate gate = new FileEditGate();
+
+        var future = gate.awaitReview(proposal);
+        gate.cancelAll();
+
+        assertFalse(future.join());
+        assertEquals("old", Files.readString(file));
+        assertFalse(gate.hasPending());
+    }
+
+    @Test
     void rejectThenRewriteRequiresReviewAgain(@TempDir Path workspace) throws Exception {
         Path file = workspace.resolve("demo.txt");
         FileEditGate gate = new FileEditGate();

@@ -50,6 +50,12 @@
     -fx-text-fill: #ffffff;
 }
 
+.save-button-dirty {
+    -fx-text-fill: #ffa657;
+    -fx-font-weight: bold;
+    -fx-border-color: #ffa657;
+}
+
 .primary-button, .send-button {
     -fx-background-color: #e4e4e4;
     -fx-text-fill: #1a1a1a;
@@ -375,27 +381,75 @@
 
 /* ── Editor tabs + terminal + @ context ── */
 .editor-tabs {
-    -fx-background-color: #1a1a1a;
+    -fx-background-color: #252526;
     -fx-border-color: #2b2b2b;
     -fx-border-width: 0 0 1 0;
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-max-height: 32;
+}
+
+.editor-tabs .tab-header-area {
+    -fx-background-color: #252526;
+    -fx-padding: 4 8 0 8;
+}
+
+.editor-tabs .tab-header-background {
+    -fx-background-color: #252526;
+}
+
+.editor-tabs .headers-region {
+    -fx-background-color: #252526;
+}
+
+/* TabPane reserves a content strip below headers; collapse it — Monaco lives in a sibling pane. */
+.editor-tabs .tab-content-area {
+    -fx-pref-height: 0;
+    -fx-min-height: 0;
+    -fx-max-height: 0;
+    -fx-padding: 0;
+    -fx-background-color: transparent;
 }
 
 .editor-tabs .tab {
-    -fx-background-color: #252525;
-    -fx-padding: 4 10;
+    -fx-background-color: #2d2d2d;
+    -fx-background-insets: 0;
+    -fx-background-radius: 6 6 0 0;
+    -fx-padding: 4 12;
 }
 
 .editor-tabs .tab:selected {
     -fx-background-color: #1e1e1e;
+    -fx-border-color: #007acc;
+    -fx-border-width: 0 0 2 0;
 }
 
 .editor-tabs .tab-label {
-    -fx-text-fill: #b0b0b0;
+    -fx-text-fill: #969696;
     -fx-font-size: 12px;
 }
 
 .editor-tabs .tab:selected .tab-label {
-    -fx-text-fill: #e4e4e4;
+    -fx-text-fill: #ffffff;
+}
+
+.editor-tabs .tab.tab-dirty .tab-label {
+    -fx-text-fill: #ffa657;
+    -fx-font-weight: bold;
+}
+
+.editor-tabs .tab.tab-dirty:selected .tab-label {
+    -fx-text-fill: #ffb86c;
+}
+
+.editor-tabs .tab .tab-close-button {
+    -fx-background-color: transparent;
+    -fx-opacity: 0.7;
+}
+
+.editor-tabs .tab .tab-close-button:hover {
+    -fx-background-color: #3e3e3e;
+    -fx-opacity: 1;
 }
 
 .terminal-pane {

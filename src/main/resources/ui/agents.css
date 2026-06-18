@@ -626,6 +626,14 @@
     -fx-background-color: #f0f0eb;
 }
 
+.agent-editor-dock .editor-tabs .tab-content-area {
+    -fx-pref-height: 0;
+    -fx-min-height: 0;
+    -fx-max-height: 0;
+    -fx-padding: 0;
+    -fx-background-color: transparent;
+}
+
 .agent-editor-dock .editor-tabs .tab {
     -fx-background-color: #e8e8e3;
     -fx-background-radius: 6 6 0 0;
@@ -646,6 +654,15 @@
     -fx-font-weight: bold;
 }
 
+.agent-editor-dock .editor-tabs .tab.tab-dirty .tab-label {
+    -fx-text-fill: #c45c00;
+    -fx-font-weight: bold;
+}
+
+.agent-editor-dock .editor-tabs .tab.tab-dirty:selected .tab-label {
+    -fx-text-fill: #a04b00;
+}
+
 .agent-editor-dock-action {
     -fx-background-color: #ffffff;
     -fx-text-fill: #3a3a36;
@@ -660,6 +677,12 @@
 .agent-editor-dock-action:hover {
     -fx-background-color: #fafaf8;
     -fx-text-fill: #1a1a18;
+}
+
+.agent-editor-dock-action-dirty {
+    -fx-text-fill: #c45c00;
+    -fx-font-weight: bold;
+    -fx-border-color: #c45c00;
 }
 
 .agent-editor-dock-close {

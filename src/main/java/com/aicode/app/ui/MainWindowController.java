@@ -78,6 +78,7 @@ public final class MainWindowController {
                 () -> workspaceRoot != null
         );
         refreshFileTreeButton.setOnAction(e -> fileTreeRefresher.refresh());
+        fileTreeRefresher.setOnAfterRefresh(() -> Platform.runLater(this::reloadOpenEditorFilesFromDisk));
         fileTreeRefresher.startAutoRefresh();
 
         fileTree.getSelectionModel().selectedItemProperty().addListener((obs, old, selected) -> {
@@ -88,7 +89,7 @@ public final class MainWindowController {
         loadFileTreeAsync(workspaceRoot);
 
         editorTabs = new EditorTabManager(workspaceGuard());
-        editorTabs.setOnStatus(msg -> Platform.runLater(() -> statusLabel.setText(msg)));
+        configureEditorTabs(editorTabs);
         VBox.setVgrow(editorTabs, Priority.ALWAYS);
         editorHost.getChildren().add(editorTabs);
 
@@ -120,6 +121,7 @@ public final class MainWindowController {
         );
         binder.setToolLogConsumer(terminalPane::appendToolLog);
         binder.setOnFileEditChanged(this::reloadEditedFile);
+        binder.setOnFileDiskChanged(this::reloadEditedFile);
         binder.bindConversations(conversationList, newConversationButton);
         binder.initializeModes();
         hubButton.setOnAction(e -> binder.appendSystemLine("请在「AiCode — 模型配置」主窗口中管理模型。"));
@@ -223,8 +225,11 @@ public final class MainWindowController {
         fileTreeRefresher.setWorkspace(workspaceRoot);
         loadFileTreeAsync(workspaceRoot);
         statusLabel.setText("Workspace: " + workspaceRoot);
+        if (editorTabs != null) {
+            editorTabs.dispose();
+        }
         editorTabs = new EditorTabManager(workspaceGuard());
-        editorTabs.setOnStatus(msg -> Platform.runLater(() -> statusLabel.setText(msg)));
+        configureEditorTabs(editorTabs);
         VBox.setVgrow(editorTabs, Priority.ALWAYS);
         editorHost.getChildren().setAll(editorTabs);
         rebindComposer(path);
@@ -252,6 +257,26 @@ public final class MainWindowController {
         composerInput.setFileLoader(this::loadFileForContext);
     }
 
+    private void configureEditorTabs(EditorTabManager tabs) {
+        tabs.setDialogOwner(() -> {
+            if (sendButton.getScene() != null && sendButton.getScene().getWindow() instanceof Stage stage) {
+                return stage;
+            }
+            return null;
+        });
+        tabs.setOnStatus(msg -> Platform.runLater(() -> statusLabel.setText(msg)));
+        tabs.setOnDirtyChanged(dirty -> Platform.runLater(() -> {
+            saveButton.setText(dirty ? "保存 *" : "保存");
+            if (dirty) {
+                if (!saveButton.getStyleClass().contains("save-button-dirty")) {
+                    saveButton.getStyleClass().add("save-button-dirty");
+                }
+            } else {
+                saveButton.getStyleClass().remove("save-button-dirty");
+            }
+        }));
+    }
+
     private WorkspaceGuard workspaceGuard() {
         return new WorkspaceGuard(
                 workspaceRoot,
@@ -277,6 +302,12 @@ public final class MainWindowController {
                 // ignore reload errors
             }
         });
+    }
+
+    private void reloadOpenEditorFilesFromDisk() {
+        if (editorTabs != null) {
+            editorTabs.reloadAllOpenFilesFromDisk();
+        }
     }
 
     void appendChat(String text) {

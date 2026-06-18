@@ -225,10 +225,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
         if (proposal.isEmpty() || fileEditListener == null) {
             return;
         }
-        FileEditProposal edit = proposal.get();
-        if (fileEditGate == null || fileEditGate.needsReview(edit.filePath())) {
-            fileEditListener.accept(edit);
-        }
+        fileEditListener.accept(proposal.get());
     }
 
     private CompletableFuture<String> finalizeFileEdit(Optional<FileEditProposal> proposal, String result) {
