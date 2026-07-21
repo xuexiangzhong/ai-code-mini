@@ -2,6 +2,7 @@ package com.aicode.agent;
 
 import com.aicode.agent.llm.ContentBlock;
 import com.aicode.agent.llm.Message;
+import com.aicode.agent.llm.ImageBlock;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.Tool;
 import com.aicode.agent.llm.ToolResultBlock;
@@ -64,6 +65,8 @@ public final class TokenCounter {
             }
         } else if (block instanceof ToolResultBlock trb) {
             return estimateTokens(trb.content());
+        } else if (block instanceof ImageBlock ib) {
+            return ib.hasData() ? Math.max(512, ib.data().length / 512) : 0;
         }
         return 0;
     }

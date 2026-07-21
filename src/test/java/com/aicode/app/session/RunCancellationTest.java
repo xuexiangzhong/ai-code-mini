@@ -60,6 +60,10 @@ class RunCancellationTest {
                 List.of(Message.user("hello")),
                 listener
         );
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (!streamStarted.get() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
         assertTrue(streamStarted.get());
         cancellation.cancel();
         Agent.AgentResult result = future.join();

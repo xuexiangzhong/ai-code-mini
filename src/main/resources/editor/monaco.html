@@ -48,15 +48,22 @@
       }
     });
 
-    function setContent(text, language) {
+    function setContent(text, language, readOnly) {
       if (!editor) return;
       suppressDirty = true;
       editor.setValue(text || '');
       if (language) {
         monaco.editor.setModelLanguage(editor.getModel(), language);
       }
+      editor.updateOptions({ readOnly: !!readOnly });
       dirty = false;
       suppressDirty = false;
+    }
+
+    function setReadOnly(readOnly) {
+      if (editor) {
+        editor.updateOptions({ readOnly: !!readOnly });
+      }
     }
 
     function getContent() {
@@ -116,6 +123,85 @@
       if (!editor || !lines) return;
       var lineHeight = editor.getOption(monaco.editor.EditorOption.lineHeight);
       editor.setScrollTop(editor.getScrollTop() + lines * lineHeight);
+    }
+
+    function isOverlayInputFocused() {
+      var active = document.activeElement;
+      if (!active || !active.closest) {
+        return false;
+      }
+      return !!(active.closest('.find-widget')
+          || active.closest('.monaco-dialog-box')
+          || active.closest('.quick-input-widget'));
+    }
+
+    function shouldHandleEditorClipboard() {
+      return !isOverlayInputFocused();
+    }
+
+    function getOverlayInputSelection() {
+      var active = document.activeElement;
+      if (!isOverlayInputFocused() || !active) {
+        return '';
+      }
+      var start = active.selectionStart;
+      var end = active.selectionEnd;
+      if (start == null || end == null) {
+        return '';
+      }
+      return (active.value || '').substring(start, end);
+    }
+
+    function insertIntoFocusedInput(text) {
+      if (text == null || !isOverlayInputFocused()) {
+        return false;
+      }
+      var active = document.activeElement;
+      var start = active.selectionStart != null ? active.selectionStart : (active.value || '').length;
+      var end = active.selectionEnd != null ? active.selectionEnd : start;
+      if (active.setRangeText) {
+        active.setRangeText(text, start, end, 'end');
+      } else {
+        var value = active.value || '';
+        active.value = value.substring(0, start) + text + value.substring(end);
+        var pos = start + text.length;
+        active.selectionStart = pos;
+        active.selectionEnd = pos;
+      }
+      active.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }
+
+    function deleteOverlayInputSelection() {
+      if (!isOverlayInputFocused()) {
+        return false;
+      }
+      var active = document.activeElement;
+      var start = active.selectionStart;
+      var end = active.selectionEnd;
+      if (start == null || end == null || start === end) {
+        return false;
+      }
+      if (active.setRangeText) {
+        active.setRangeText('', start, end, 'end');
+      } else {
+        var value = active.value || '';
+        active.value = value.substring(0, start) + value.substring(end);
+        active.selectionStart = start;
+        active.selectionEnd = start;
+      }
+      active.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    }
+
+    function selectAllFocusedInput() {
+      if (!isOverlayInputFocused()) {
+        return false;
+      }
+      var active = document.activeElement;
+      active.selectionStart = 0;
+      active.selectionEnd = (active.value || '').length;
+      return true;
     }
   </script>
 </body>

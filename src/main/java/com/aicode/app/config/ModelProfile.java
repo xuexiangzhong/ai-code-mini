@@ -17,7 +17,10 @@ public record ModelProfile(
         Integer contextWindow,
         Integer maxOutputTokens,
         Integer maxOutputTokenCap,
-        Integer maxOutputRetries
+        Integer maxOutputRetries,
+        Integer maxIterations,
+        Boolean parallelToolCalls,
+        String embeddingModel
 ) {
     public static ModelProfile createDefault() {
         String id = java.util.UUID.randomUUID().toString().substring(0, 8);
@@ -29,6 +32,9 @@ public record ModelProfile(
                 "",
                 defaults.model(),
                 defaults.providerType(),
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -76,6 +82,23 @@ public record ModelProfile(
             String providerType,
             Integer contextWindow
     ) {
+        return withExtendedValues(
+                name, baseUrl, apiKey, model, providerType, contextWindow,
+                maxIterations, parallelToolCalls, embeddingModel
+        );
+    }
+
+    public ModelProfile withExtendedValues(
+            String name,
+            String baseUrl,
+            String apiKey,
+            String model,
+            String providerType,
+            Integer contextWindow,
+            Integer maxIterations,
+            Boolean parallelToolCalls,
+            String embeddingModel
+    ) {
         return new ModelProfile(
                 id,
                 name != null && !name.isBlank() ? name : this.name,
@@ -86,7 +109,10 @@ public record ModelProfile(
                 contextWindow != null ? contextWindow : this.contextWindow,
                 maxOutputTokens,
                 maxOutputTokenCap,
-                maxOutputRetries
+                maxOutputRetries,
+                maxIterations != null ? maxIterations : this.maxIterations,
+                parallelToolCalls != null ? parallelToolCalls : this.parallelToolCalls,
+                embeddingModel != null ? embeddingModel : this.embeddingModel
         );
     }
 
@@ -98,7 +124,10 @@ public record ModelProfile(
             String model,
             String providerType
     ) {
-        return new ModelProfile(id, name, baseUrl, apiKey, model, providerType, null, null, null, null);
+        return new ModelProfile(
+                id, name, baseUrl, apiKey, model, providerType,
+                null, null, null, null, null, null, null
+        );
     }
 
     private static String formatTokens(int value) {

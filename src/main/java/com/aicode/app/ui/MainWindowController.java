@@ -5,6 +5,8 @@ import com.aicode.app.config.ModelProfile;
 import com.aicode.app.config.ModelRegistry;
 import com.aicode.app.config.WorkingDirectory;
 import com.aicode.app.ui.dialog.AgentsSetupPromptDialog;
+import com.aicode.app.ui.pane.EditorFileContent;
+import com.aicode.app.ui.pane.EditorFileLoader;
 import com.aicode.app.ui.pane.EditorTabManager;
 import com.aicode.app.ui.pane.TerminalPane;
 import com.aicode.app.window.WindowManager;
@@ -160,7 +162,11 @@ public final class MainWindowController {
         }
         Thread.ofVirtual().name("context-file-load").start(() -> {
             try {
-                String content = Files.readString(path);
+                EditorFileContent loaded = EditorFileLoader.load(path);
+                String content = switch (loaded.mode()) {
+                    case TEXT, HEX -> loaded.text();
+                    default -> "";
+                };
                 Platform.runLater(() -> callback.accept(content));
             } catch (IOException e) {
                 Platform.runLater(() -> callback.accept(""));
@@ -242,7 +248,7 @@ public final class MainWindowController {
 
     private AtMentionInput createComposerInput(Path workspace) {
         AtMentionInput input = new AtMentionInput();
-        input.setPromptText("输入问题或编程任务…（@ 引用文件，Enter 发送，Shift+Enter 换行）");
+        input.setPromptText("输入问题或编程任务…（@ 引用 · 粘贴/拖入图片 · Enter 发送）");
         input.bindWorkspace(workspace);
         input.setActiveFileSupplier(() -> editorTabs.activeFile().orElse(null));
         input.setEditorPaneSupplier(() -> editorTabs.editorPane());
@@ -296,7 +302,7 @@ public final class MainWindowController {
                     Platform.runLater(() -> editorTabs.closeFile(path));
                     return;
                 }
-                String content = Files.readString(path);
+                EditorFileContent content = EditorFileLoader.load(path);
                 Platform.runLater(() -> editorTabs.reloadFile(path, content));
             } catch (IOException ignored) {
                 // ignore reload errors
@@ -328,10 +334,10 @@ public final class MainWindowController {
             return;
         }
         try {
-            String content = Files.readString(resolved);
+            EditorFileContent content = EditorFileLoader.load(resolved);
             editorTabs.openFile(resolved, content);
         } catch (IOException e) {
-            binder.appendSystemLine("Failed to open file: " + e.getMessage());
+            binder.appendSystemLine("无法打开文件: " + e.getMessage());
         }
     }
 }

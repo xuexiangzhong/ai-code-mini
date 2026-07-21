@@ -663,6 +663,19 @@
     -fx-text-fill: #a04b00;
 }
 
+.agent-editor-dock .editor-encoding-box {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d4d4cf;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-font-size: 10px;
+    -fx-text-fill: #3a3a36;
+}
+
+.agent-editor-dock .editor-encoding-box .list-cell {
+    -fx-font-size: 11px;
+}
+
 .agent-editor-dock-action {
     -fx-background-color: #ffffff;
     -fx-text-fill: #3a3a36;

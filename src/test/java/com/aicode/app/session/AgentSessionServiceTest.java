@@ -247,7 +247,8 @@ class AgentSessionServiceTest {
                 8192,
                 32768,
                 2,
-                true
+                true,
+                ""
         );
     }
 }

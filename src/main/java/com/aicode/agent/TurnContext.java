@@ -1,6 +1,8 @@
 package com.aicode.agent;
 
+import com.aicode.agent.llm.ContentBlock;
 import com.aicode.agent.llm.Message;
+import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.tools.ShellRunner;
 
 import java.io.BufferedReader;
@@ -71,22 +73,40 @@ public final class TurnContext {
         return formatDynamicEnvironmentBlock() + "\n\n" + userMessage;
     }
 
-    /** Inject environment on the last plain user message (ephemeral, not stored in history). */
+    /** Inject environment on the last user message (ephemeral, not stored in history). */
     public static List<Message> injectOnLastUserMessage(List<Message> messages, TurnContext ctx) {
         if (ctx == null || messages.isEmpty()) {
             return messages;
         }
         for (int i = messages.size() - 1; i >= 0; i--) {
             Message message = messages.get(i);
-            if (!"user".equals(message.role()) || !message.isStringContent()) {
+            if (!"user".equals(message.role())) {
                 continue;
             }
-            String text = message.contentText();
-            if (text.startsWith("[Previous conversation summary]") || text.startsWith("<environment>")) {
+            if (message.isStringContent()) {
+                String text = message.contentText();
+                if (text.startsWith("[Previous conversation summary]") || text.startsWith("<environment>")) {
+                    continue;
+                }
+                List<Message> copy = new ArrayList<>(messages);
+                copy.set(i, Message.user(ctx.prependToUserMessage(text)));
+                return copy;
+            }
+            List<ContentBlock> blocks = new ArrayList<>(message.contentBlocks());
+            if (blocks.isEmpty()) {
                 continue;
+            }
+            String env = ctx.formatDynamicEnvironmentBlock();
+            if (blocks.getFirst() instanceof TextBlock first) {
+                if (first.text().startsWith("<environment>")) {
+                    continue;
+                }
+                blocks.set(0, new TextBlock(env + "\n\n" + first.text()));
+            } else {
+                blocks.addFirst(new TextBlock(env + "\n\n"));
             }
             List<Message> copy = new ArrayList<>(messages);
-            copy.set(i, Message.user(ctx.prependToUserMessage(text)));
+            copy.set(i, Message.userBlocks(blocks));
             return copy;
         }
         return messages;

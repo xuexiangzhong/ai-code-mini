@@ -1,5 +1,6 @@
 package com.aicode.app.ui.pane;
 
+import com.aicode.agent.index.CodebaseIndexRefresher;
 import com.aicode.app.application.WorkspaceGuard;
 import com.aicode.app.config.WorkingDirectory;
 import com.aicode.app.ui.dialog.ExternalFileChangeDialog;
@@ -8,6 +9,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -26,7 +28,10 @@ import java.util.function.Supplier;
 /** Multi-tab file editor backed by a single Monaco {@link EditorPane}. */
 public final class EditorTabManager extends VBox {
     private final TabPane tabPane = new TabPane();
+    private final StackPane editorHost = new StackPane();
     private final EditorPane editorPane = new EditorPane();
+    private final ImagePreviewPane imagePreviewPane = new ImagePreviewPane();
+    private final MessagePreviewPane messagePreviewPane = new MessagePreviewPane();
     private final Map<Path, EditorTab> tabs = new LinkedHashMap<>();
     private final Set<Path> pendingExternalPrompts = ConcurrentHashMap.newKeySet();
     private final OpenFileWatcher fileWatcher;
@@ -42,7 +47,7 @@ public final class EditorTabManager extends VBox {
         this.guard = guard;
         this.fileWatcher = new OpenFileWatcher(new OpenFileWatcher.Listener() {
             @Override
-            public void onExternalChange(Path path, String diskContent) {
+            public void onExternalChange(Path path, EditorFileContent diskContent) {
                 handleExternalDiskChange(path, diskContent);
             }
 
@@ -53,12 +58,14 @@ public final class EditorTabManager extends VBox {
         });
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.ALL_TABS);
         tabPane.getStyleClass().add("editor-tabs");
-        tabPane.setMinHeight(32);
-        tabPane.setPrefHeight(32);
+        tabPane.setMinHeight(36);
+        tabPane.setPrefHeight(36);
         tabPane.setMaxHeight(Region.USE_PREF_SIZE);
         tabPane.setTabMinWidth(96);
-        VBox.setVgrow(editorPane, Priority.ALWAYS);
-        getChildren().addAll(tabPane, editorPane);
+        editorHost.getChildren().addAll(editorPane, imagePreviewPane, messagePreviewPane);
+        showView(EditorViewMode.TEXT);
+        VBox.setVgrow(editorHost, Priority.ALWAYS);
+        getChildren().addAll(tabPane, editorHost);
 
         editorPane.setOnDirty(this::markActiveDirty);
         editorPane.startDirtyPolling();
@@ -68,11 +75,15 @@ public final class EditorTabManager extends VBox {
             }
             if (newTab == null) {
                 activeTab = null;
+                if (tabs.isEmpty()) {
+                    clearEditorView();
+                    notifyDirtyChanged(false);
+                }
                 return;
             }
             activeTab = tabFor(newTab);
             if (activeTab != null) {
-                editorPane.openFile(activeTab.content(), activeTab.language());
+                showTabContent(activeTab);
                 notifyActive(activeTab.path());
                 notifyDirtyChanged(activeTab.dirty());
             }
@@ -114,8 +125,12 @@ public final class EditorTabManager extends VBox {
     }
 
     public void openFile(Path path, String content) {
+        openFile(path, EditorFileContent.text(content));
+    }
+
+    public void openFile(Path path, EditorFileContent content) {
         Path key = normalize(path);
-        String blocked = guard.validate(key.toString());
+        String blocked = guard.validateForEditor(key.toString());
         if (blocked != null) {
             status("拒绝打开: " + blocked);
             return;
@@ -129,8 +144,9 @@ public final class EditorTabManager extends VBox {
             fileWatcher.refreshBaseline(key);
             return;
         }
-        EditorTab editorTab = new EditorTab(key, content);
-        Tab tab = new Tab(displayName(key));
+        EditorTab editorTab = new EditorTab(key, content, this::changeEncoding);
+        Tab tab = new Tab();
+        tab.setGraphic(editorTab.header().node());
         tab.setUserData(editorTab);
         tab.setClosable(true);
         tab.setOnCloseRequest(e -> {
@@ -147,19 +163,21 @@ public final class EditorTabManager extends VBox {
     }
 
     public void saveActiveFile() {
-        if (activeTab == null) {
+        if (activeTab == null || !activeTab.editable()) {
             return;
         }
         editorPane.getContentAsync().thenAccept(content -> Platform.runLater(() -> {
             try {
-                String blocked = guard.validate(activeTab.path().toString());
+                String blocked = guard.validateForEditor(activeTab.path().toString());
                 if (blocked != null) {
                     status("拒绝保存: " + blocked);
                     return;
                 }
-                Files.writeString(activeTab.path(), content);
-                applyContent(activeTab, content, true);
+                byte[] bytes = EditorCharsets.encode(content, activeTab.charsetName());
+                Files.write(activeTab.path(), bytes);
+                applyContent(activeTab, EditorFileContent.text(content, bytes, activeTab.charsetName()), true);
                 fileWatcher.refreshBaseline(activeTab.path());
+                CodebaseIndexRefresher.scheduleRefresh(guard.workspace());
                 status("已保存: " + activeTab.path());
             } catch (IOException e) {
                 status("保存失败: " + e.getMessage());
@@ -172,7 +190,7 @@ public final class EditorTabManager extends VBox {
     }
 
     /** Reload from disk when the tab has no unsaved local edits (e.g. agent wrote the file). */
-    public void reloadFile(Path path, String content) {
+    public void reloadFile(Path path, EditorFileContent content) {
         Path key = normalize(path);
         EditorTab tab = tabs.get(key);
         if (tab != null) {
@@ -188,6 +206,10 @@ public final class EditorTabManager extends VBox {
         openFile(path, content);
     }
 
+    public void reloadFile(Path path, String content) {
+        reloadFile(path, EditorFileContent.text(content));
+    }
+
     /** Reload every open tab from disk when it has no unsaved local edits. */
     public void reloadAllOpenFilesFromDisk() {
         for (Path path : List.copyOf(tabs.keySet())) {
@@ -200,7 +222,7 @@ public final class EditorTabManager extends VBox {
                     closeFile(path);
                     continue;
                 }
-                reloadFile(path, Files.readString(path));
+                reloadFile(path, loadForTab(path, tab.charsetName()));
             } catch (IOException ignored) {
                 // skip unreadable file
             }
@@ -218,7 +240,7 @@ public final class EditorTabManager extends VBox {
                 activeTab = null;
             }
             if (tabs.isEmpty()) {
-                notifyAllTabsClosed();
+                handleAllTabsClosed();
             }
         }
     }
@@ -231,11 +253,24 @@ public final class EditorTabManager extends VBox {
             activeTab = null;
         }
         if (tabs.isEmpty()) {
-            notifyAllTabsClosed();
+            handleAllTabsClosed();
         }
     }
 
-    private void handleExternalDiskChange(Path path, String diskContent) {
+    private void handleAllTabsClosed() {
+        clearEditorView();
+        notifyDirtyChanged(false);
+        notifyAllTabsClosed();
+    }
+
+    private void clearEditorView() {
+        showView(EditorViewMode.TEXT);
+        editorPane.openFile("", "plaintext", true);
+        imagePreviewPane.clear();
+        messagePreviewPane.clear();
+    }
+
+    private void handleExternalDiskChange(Path path, EditorFileContent ignored) {
         Path key = normalize(path);
         if (pendingExternalPrompts.contains(key)) {
             return;
@@ -243,6 +278,12 @@ public final class EditorTabManager extends VBox {
         EditorTab tab = tabs.get(key);
         if (tab == null) {
             fileWatcher.untrack(key);
+            return;
+        }
+        final EditorFileContent diskContent;
+        try {
+            diskContent = loadForTab(path, tab.charsetName());
+        } catch (IOException e) {
             return;
         }
         fileWatcher.acknowledgeDiskRevision(key);
@@ -268,14 +309,15 @@ public final class EditorTabManager extends VBox {
         });
     }
 
-    private void applyContent(EditorTab tab, String content, boolean markClean) {
+    private void applyContent(EditorTab tab, EditorFileContent content, boolean markClean) {
         tab.setContent(content);
+        tab.syncHeader();
         if (markClean) {
             setTabDirty(tab, false);
         }
         if (activeTab == tab) {
-            editorPane.openFile(content, tab.language());
-            if (markClean) {
+            showTabContent(tab);
+            if (markClean && tab.editable()) {
                 editorPane.markClean();
             }
         } else if (markClean) {
@@ -283,15 +325,64 @@ public final class EditorTabManager extends VBox {
         }
     }
 
-    private void cacheEditorContent(EditorTab tab) {
-        if (tab == null) {
+    private void changeEncoding(EditorTab tab, String charsetName) {
+        if (!tab.supportsEncoding()) {
             return;
         }
-        editorPane.getContentAsync().thenAccept(content -> Platform.runLater(() -> tab.setContent(content)));
+        if (tab.dirty()) {
+            tab.header().setEncoding(tab.charsetName());
+            status("请先保存后再切换编码");
+            return;
+        }
+        try {
+            EditorFileContent decoded = EditorFileLoader.redecode(tab.rawBytes(), charsetName);
+            applyContent(tab, decoded, true);
+            if (activeTab == tab) {
+                status("已切换编码: " + charsetName);
+            }
+        } catch (Exception e) {
+            tab.header().setEncoding(tab.charsetName());
+            status("无法使用编码 " + charsetName + ": " + e.getMessage());
+        }
+    }
+
+    private EditorFileContent loadForTab(Path path, String charsetName) throws IOException {
+        EditorFileContent loaded = EditorFileLoader.load(path);
+        if (loaded.supportsEncoding()) {
+            return EditorFileLoader.redecode(loaded, charsetName);
+        }
+        return loaded;
+    }
+
+    private void showTabContent(EditorTab tab) {
+        showView(tab.viewMode());
+        switch (tab.viewMode()) {
+            case TEXT -> editorPane.openFile(tab.textContent(), tab.language(), false);
+            case HEX -> editorPane.openFile(tab.textContent(), "plaintext", true);
+            case IMAGE -> imagePreviewPane.showImage(tab.imageBytes());
+            case MESSAGE -> messagePreviewPane.showMessage(tab.textContent());
+        }
+    }
+
+    private void showView(EditorViewMode mode) {
+        editorPane.setVisible(mode == EditorViewMode.TEXT || mode == EditorViewMode.HEX);
+        editorPane.setManaged(mode == EditorViewMode.TEXT || mode == EditorViewMode.HEX);
+        imagePreviewPane.setVisible(mode == EditorViewMode.IMAGE);
+        imagePreviewPane.setManaged(mode == EditorViewMode.IMAGE);
+        messagePreviewPane.setVisible(mode == EditorViewMode.MESSAGE);
+        messagePreviewPane.setManaged(mode == EditorViewMode.MESSAGE);
+    }
+
+    private void cacheEditorContent(EditorTab tab) {
+        if (tab == null || !tab.editable()) {
+            return;
+        }
+        editorPane.getContentAsync().thenAccept(content -> Platform.runLater(() ->
+                tab.setContent(EditorFileContent.text(content, tab.rawBytes(), tab.charsetName()))));
     }
 
     private void markActiveDirty() {
-        if (activeTab != null) {
+        if (activeTab != null && activeTab.editable()) {
             setTabDirty(activeTab, true);
         }
     }
@@ -309,9 +400,8 @@ public final class EditorTabManager extends VBox {
     }
 
     private void refreshTabTitle(EditorTab editorTab) {
+        editorTab.syncHeader();
         Tab tab = editorTab.tab();
-        String name = displayName(editorTab.path());
-        tab.setText(name + (editorTab.dirty() ? " *" : ""));
         if (editorTab.dirty()) {
             if (!tab.getStyleClass().contains("tab-dirty")) {
                 tab.getStyleClass().add("tab-dirty");
@@ -360,14 +450,18 @@ public final class EditorTabManager extends VBox {
     private static final class EditorTab {
         private final Path path;
         private final String language;
+        private final EditorTabHeader header;
         private Tab tab;
-        private String content;
+        private EditorFileContent content;
         private boolean dirty;
 
-        private EditorTab(Path path, String content) {
+        private EditorTab(Path path, EditorFileContent content, EncodingChangeHandler encodingChangeHandler) {
             this.path = path;
             this.language = EditorLanguage.detect(path);
             this.content = content;
+            this.header = new EditorTabHeader(displayName(path), charset ->
+                    encodingChangeHandler.onEncodingChange(this, charset));
+            syncHeader();
         }
 
         Path path() {
@@ -378,12 +472,46 @@ public final class EditorTabManager extends VBox {
             return language;
         }
 
-        String content() {
-            return content;
+        EditorViewMode viewMode() {
+            return content.mode();
         }
 
-        void setContent(String content) {
+        String textContent() {
+            return content.text();
+        }
+
+        byte[] imageBytes() {
+            return content.imageBytes();
+        }
+
+        byte[] rawBytes() {
+            return content.rawBytes();
+        }
+
+        String charsetName() {
+            return content.charsetName() != null ? content.charsetName() : EditorCharsets.DEFAULT;
+        }
+
+        boolean editable() {
+            return content.editable();
+        }
+
+        boolean supportsEncoding() {
+            return content.supportsEncoding();
+        }
+
+        void setContent(EditorFileContent content) {
             this.content = content;
+        }
+
+        void syncHeader() {
+            header.setFileName(displayName(path), dirty);
+            header.setEncoding(charsetName());
+            header.setEncodingVisible(supportsEncoding());
+        }
+
+        EditorTabHeader header() {
+            return header;
         }
 
         Tab tab() {
@@ -405,5 +533,10 @@ public final class EditorTabManager extends VBox {
         void markClean() {
             dirty = false;
         }
+    }
+
+    @FunctionalInterface
+    private interface EncodingChangeHandler {
+        void onEncodingChange(EditorTab tab, String charsetName);
     }
 }

@@ -11,7 +11,13 @@ public final class TokenLimitsResolver {
         int maxOutput = positiveOrDefault(profile.maxOutputTokens(), OutputTokenLimits.DEFAULT_BASE);
         int maxCap = positiveOrDefault(profile.maxOutputTokenCap(), OutputTokenLimits.DEFAULT_CAP);
         int maxRetries = positiveOrDefault(profile.maxOutputRetries(), OutputTokenLimits.DEFAULT_RETRIES);
-        return config.withTokenLimits(contextWindow, maxOutput, maxCap, maxRetries);
+        AppConfig withTokens = config.withTokenLimits(contextWindow, maxOutput, maxCap, maxRetries);
+        int maxIterations = positiveOrDefault(profile.maxIterations(), AppConfig.withDefaults().maxIterations());
+        boolean parallelTools = profile.parallelToolCalls() != null
+                ? profile.parallelToolCalls()
+                : AppConfig.withDefaults().parallelToolCalls();
+        String embeddingModel = profile.embeddingModel() != null ? profile.embeddingModel() : "";
+        return withTokens.withAgentSettings(maxIterations, parallelTools, embeddingModel);
     }
 
     public static int effectiveContextWindow(String model, Integer userValue) {

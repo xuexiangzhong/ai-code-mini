@@ -102,7 +102,7 @@ public final class ConversationTranscriptLoader {
             transcript.addStandaloneNotice(turn.assistantText(), turn.createdAt());
             return;
         }
-        transcript.startTurn(turn.userText(), turn.createdAt());
+        transcript.startTurn(turn.userText(), turn.createdAt(), turn.userImagePaths());
         for (String activity : turn.activities()) {
             transcript.addActivity(activity);
         }
@@ -116,6 +116,12 @@ public final class ConversationTranscriptLoader {
             transcript.prependStandaloneNotice(turn.assistantText(), turn.createdAt());
             return;
         }
-        transcript.prependTurn(turn.userText(), turn.activities(), turn.assistantText(), turn.createdAt());
+        transcript.prependTurn(
+                turn.userText(),
+                turn.activities(),
+                turn.assistantText(),
+                turn.createdAt(),
+                turn.userImagePaths()
+        );
     }
 }

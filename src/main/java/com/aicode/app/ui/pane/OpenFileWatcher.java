@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class OpenFileWatcher implements AutoCloseable {
     public interface Listener {
-        void onExternalChange(Path path, String diskContent);
+        void onExternalChange(Path path, EditorFileContent diskContent);
 
         void onExternalDelete(Path path);
     }
@@ -84,9 +84,9 @@ public final class OpenFileWatcher implements AutoCloseable {
             if (current == known) {
                 continue;
             }
-            String content;
+            EditorFileContent content;
             try {
-                content = Files.readString(path);
+                content = EditorFileLoader.load(path);
             } catch (IOException e) {
                 continue;
             }

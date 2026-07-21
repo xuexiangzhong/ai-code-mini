@@ -16,6 +16,7 @@ import com.aicode.agent.tools.SemanticSearchTool;
 import com.aicode.agent.tools.WriteTool;
 import com.aicode.app.approval.ApprovalGate;
 import com.aicode.app.approval.FileEditGate;
+import com.aicode.agent.index.CodebaseIndexRefresher;
 import com.aicode.app.session.FileEditProposal;
 
 import java.io.IOException;
@@ -159,7 +160,11 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
             }
             String result = switch (name) {
                 case "read_file" -> ReadTool.execute(ReadTool.Input.fromMap(input));
-                case "delete_file" -> DeleteTool.execute(DeleteTool.Input.fromMap(input));
+                case "delete_file" -> {
+                    String deleted = DeleteTool.execute(DeleteTool.Input.fromMap(input));
+                    scheduleIndexRefresh();
+                    yield deleted;
+                }
                 case "bash" -> BashTool.execute(BashTool.Input.fromMap(input), guard.workspace()).join();
                 case "glob" -> GlobTool.execute(GlobTool.Input.fromMap(input));
                 case "grep" -> GrepTool.execute(GrepTool.Input.fromMap(input));
@@ -184,6 +189,7 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
         }
         Optional<FileEditProposal> proposal = buildProposal(path, oldContent, created, result);
         notifyFileEdit(proposal);
+        scheduleIndexRefresh();
         return finalizeFileEdit(proposal, result);
     }
 
@@ -196,7 +202,12 @@ public final class DefaultToolExecutor implements Agent.ToolExecutor {
         }
         Optional<FileEditProposal> proposal = buildProposal(path, oldContent, false, result);
         notifyFileEdit(proposal);
+        scheduleIndexRefresh();
         return finalizeFileEdit(proposal, result);
+    }
+
+    private void scheduleIndexRefresh() {
+        CodebaseIndexRefresher.scheduleRefresh(guard.workspace());
     }
 
     private Optional<FileEditProposal> buildProposal(

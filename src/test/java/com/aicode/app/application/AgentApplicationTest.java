@@ -56,7 +56,8 @@ class AgentApplicationTest {
                 8192,
                 32768,
                 2,
-                true
+                true,
+                "text-embedding-3-small"
         );
     }
 }

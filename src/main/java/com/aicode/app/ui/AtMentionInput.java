@@ -1,5 +1,6 @@
 package com.aicode.app.ui;
 
+import com.aicode.agent.llm.ImageBlock;
 import com.aicode.app.config.WorkingDirectory;
 import com.aicode.app.ui.pane.EditorPane;
 import javafx.application.Platform;
@@ -8,12 +9,26 @@ import javafx.scene.Node;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
+import javafx.scene.control.Button;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.TransferMode;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
 import javafx.stage.Popup;
+import javafx.stage.Stage;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,12 +38,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * Cursor-style inline @ mentions inside the composer text area.
- * Type {@code @} to open file / selection picker; chosen items appear as {@code @token} in text.
+ * Cursor-style composer: @ mentions, paste/drag images, thumbnail chips above the text area.
  */
 public final class AtMentionInput extends VBox implements ChatComposerInput {
     private static final int POPUP_LIMIT = 10;
     private static final double ROW_HEIGHT = 34;
+    private static final double THUMB_SIZE = 56;
 
     public sealed interface MentionOption {
         String label();
@@ -95,7 +110,10 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
         }
     }
 
+    private final FlowPane attachmentBar = new FlowPane(6, 6);
     private final TextArea textArea = new TextArea();
+    private final HBox composerToolbar = new HBox(6);
+    private final Button attachImageButton = new Button("🖼");
     private final ChatContextAttachments attachments = new ChatContextAttachments();
     private final Popup popup = new Popup();
     private final ListView<MentionOption> optionList = new ListView<>();
@@ -114,11 +132,25 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
 
     public AtMentionInput() {
         getStyleClass().add("at-mention-input");
+        attachmentBar.getStyleClass().add("composer-attachment-bar");
+        attachmentBar.setVisible(false);
+        attachmentBar.setManaged(false);
+
         textArea.getStyleClass().add("at-mention-textarea");
         textArea.setPrefRowCount(3);
         textArea.setWrapText(true);
         VBox.setVgrow(textArea, Priority.ALWAYS);
-        getChildren().add(textArea);
+
+        attachImageButton.getStyleClass().add("composer-attach-image-btn");
+        attachImageButton.setFocusTraversable(false);
+        attachImageButton.setTooltip(new Tooltip("添加图片"));
+        attachImageButton.setOnAction(e -> pickImages());
+        composerToolbar.getStyleClass().add("composer-toolbar");
+        composerToolbar.getChildren().add(attachImageButton);
+
+        getChildren().addAll(attachmentBar, textArea, composerToolbar);
+
+        installImagePasteAndDrop();
 
         optionList.getStyleClass().add("at-mention-popup-list");
         optionList.setPrefWidth(360);
@@ -190,6 +222,7 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
     @Override
     public void disableInput(boolean disabled) {
         textArea.setDisable(disabled);
+        attachImageButton.setDisable(disabled);
     }
 
     @Override
@@ -210,6 +243,7 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
     @Override
     public void clearAfterSend() {
         attachments.clear();
+        refreshAttachmentBar();
         clear();
     }
 
@@ -252,6 +286,10 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
     }
 
     private void onKeyPressed(KeyEvent event) {
+        if (isPasteShortcut(event) && tryPasteImageFromClipboard()) {
+            event.consume();
+            return;
+        }
         if (popupOpen) {
             if (event.getCode() == KeyCode.ESCAPE) {
                 hidePopup();
@@ -402,7 +440,26 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
     }
 
     private void attachFile(Path path, String token) {
-        Runnable insert = () -> insertToken(token + " ");
+        Runnable insert = () -> {
+            if (token != null && !token.isBlank()) {
+                insertToken(token + " ");
+            }
+        };
+        if (ImageBlock.isImagePath(path)) {
+            String mentionToken = token != null && !token.isBlank() ? token : null;
+            Thread.ofVirtual().name("mention-image-load").start(() -> {
+                try {
+                    byte[] bytes = Files.readAllBytes(path);
+                    String mediaType = ImageBlock.mediaTypeFor(path);
+                    Platform.runLater(() -> attachImagePath(path, bytes, mediaType, mentionToken));
+                } catch (IOException e) {
+                    if (mentionToken != null) {
+                        Platform.runLater(() -> insertToken(mentionToken + " "));
+                    }
+                }
+            });
+            return;
+        }
         if (fileLoader != null) {
             fileLoader.accept(path, content -> Platform.runLater(() -> {
                 attachments.addFile(path, content);
@@ -494,5 +551,152 @@ public final class AtMentionInput extends VBox implements ChatComposerInput {
             i--;
         }
         return -1;
+    }
+
+    private void installImagePasteAndDrop() {
+        setOnDragOver(this::onDragOver);
+        setOnDragDropped(this::onDragDropped);
+        textArea.setOnDragOver(this::onDragOver);
+        textArea.setOnDragDropped(this::onDragDropped);
+    }
+
+    private void onDragOver(DragEvent event) {
+        if (event.getDragboard().hasImage() || hasImageFiles(event.getDragboard())) {
+            event.acceptTransferModes(TransferMode.COPY);
+        }
+        event.consume();
+    }
+
+    private void onDragDropped(DragEvent event) {
+        Dragboard board = event.getDragboard();
+        boolean handled = false;
+        if (board.hasImage()) {
+            Image image = board.getImage();
+            if (image != null && image.getWidth() > 0) {
+                attachClipboardImage(image);
+                handled = true;
+            }
+        }
+        if (!handled && board.hasFiles()) {
+            for (java.io.File file : board.getFiles()) {
+                Path path = file.toPath();
+                if (ImageBlock.isImagePath(path)) {
+                    attachFile(path, "");
+                    handled = true;
+                }
+            }
+        }
+        event.setDropCompleted(handled);
+        event.consume();
+    }
+
+    private static boolean hasImageFiles(Dragboard board) {
+        if (!board.hasFiles()) {
+            return false;
+        }
+        for (java.io.File file : board.getFiles()) {
+            if (ImageBlock.isImagePath(file.toPath())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isPasteShortcut(KeyEvent event) {
+        return event.getCode() == KeyCode.V && event.isShortcutDown() && !event.isShiftDown();
+    }
+
+    private boolean tryPasteImageFromClipboard() {
+        Clipboard clipboard = Clipboard.getSystemClipboard();
+        if (clipboard.hasImage()) {
+            Image image = clipboard.getImage();
+            if (image != null && image.getWidth() > 0 && image.getHeight() > 0) {
+                attachClipboardImage(image);
+                return true;
+            }
+        }
+        if (clipboard.hasFiles()) {
+            for (java.io.File file : clipboard.getFiles()) {
+                Path path = file.toPath();
+                if (ImageBlock.isImagePath(path)) {
+                    attachFile(path, "");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void attachClipboardImage(Image fxImage) {
+        Thread.ofVirtual().name("composer-paste-image").start(() -> {
+            try {
+                byte[] png = ImageBytes.toPng(fxImage);
+                Path saved = ComposerImageStore.save(workspaceRoot, png, "paste");
+                Platform.runLater(() -> attachImagePath(saved, png, "image/png", null));
+            } catch (IOException ignored) {
+                // fall through — let default text paste happen on next attempt
+            }
+        });
+    }
+
+    private void pickImages() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("选择图片");
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("图片", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp")
+        );
+        Stage stage = getScene() != null && getScene().getWindow() instanceof Stage s ? s : null;
+        List<File> files = chooser.showOpenMultipleDialog(stage);
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            Path path = file.toPath();
+            if (ImageBlock.isImagePath(path)) {
+                attachFile(path, "");
+            }
+        }
+    }
+
+    private void attachImagePath(Path path, byte[] bytes, String mediaType, String mentionToken) {
+        attachments.addImage(path, bytes, mediaType);
+        refreshAttachmentBar();
+        if (mentionToken != null && !mentionToken.isBlank()) {
+            insertToken(mentionToken.endsWith(" ") ? mentionToken : mentionToken + " ");
+        }
+    }
+
+    private void refreshAttachmentBar() {
+        attachmentBar.getChildren().clear();
+        List<ChatContextAttachments.Attachment.Image> images = attachments.images();
+        if (images.isEmpty()) {
+            attachmentBar.setVisible(false);
+            attachmentBar.setManaged(false);
+            return;
+        }
+        for (ChatContextAttachments.Attachment.Image img : images) {
+            attachmentBar.getChildren().add(buildImageChip(img));
+        }
+        attachmentBar.setVisible(true);
+        attachmentBar.setManaged(true);
+    }
+
+    private StackPane buildImageChip(ChatContextAttachments.Attachment.Image img) {
+        ImageView preview = new ImageView(new Image(new java.io.ByteArrayInputStream(img.data())));
+        preview.setFitWidth(THUMB_SIZE);
+        preview.setFitHeight(THUMB_SIZE);
+        preview.setPreserveRatio(true);
+        javafx.scene.control.Label remove = new javafx.scene.control.Label("×");
+        remove.getStyleClass().add("composer-attachment-remove");
+        remove.setOnMouseClicked(e -> {
+            attachments.removeImage(img.path());
+            refreshAttachmentBar();
+        });
+
+        StackPane chip = new StackPane(preview, remove);
+        chip.getStyleClass().add("composer-attachment-chip");
+        StackPane.setAlignment(remove, javafx.geometry.Pos.TOP_RIGHT);
+        Tooltip.install(chip, new Tooltip(ComposerImageStore.displayName(img.path())));
+        return chip;
     }
 }

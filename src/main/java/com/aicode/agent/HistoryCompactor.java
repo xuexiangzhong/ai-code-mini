@@ -2,6 +2,7 @@ package com.aicode.agent;
 
 import com.aicode.agent.llm.ContentBlock;
 import com.aicode.agent.llm.Message;
+import com.aicode.agent.llm.ImageBlock;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.ToolResultBlock;
 import com.aicode.agent.llm.ToolUseBlock;
@@ -97,6 +98,8 @@ public final class HistoryCompactor {
                 ));
             } else if (block instanceof ToolUseBlock tub) {
                 compacted.add(tub);
+            } else if (block instanceof ImageBlock ib) {
+                compacted.add(new TextBlock("[@图片: " + ib.sourcePath() + "] (历史图像已省略)"));
             } else {
                 compacted.add(block);
             }
@@ -135,9 +138,17 @@ public final class HistoryCompactor {
     }
 
     static boolean isUserTurnMessage(Message message) {
-        return "user".equals(message.role())
-                && message.isStringContent()
-                && !message.contentText().startsWith("[Previous conversation summary]");
+        if (!"user".equals(message.role())) {
+            return false;
+        }
+        if (message.isStringContent()) {
+            return !message.contentText().startsWith("[Previous conversation summary]");
+        }
+        List<ContentBlock> blocks = message.contentBlocks();
+        if (blocks.isEmpty() || blocks.stream().allMatch(ToolResultBlock.class::isInstance)) {
+            return false;
+        }
+        return blocks.stream().anyMatch(b -> b instanceof TextBlock || b instanceof ImageBlock);
     }
 
     static boolean isSummaryMessage(Message message) {

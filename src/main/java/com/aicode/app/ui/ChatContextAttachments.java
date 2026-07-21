@@ -1,19 +1,24 @@
 package com.aicode.app.ui;
 
 import com.aicode.agent.ContextSanitizer;
+import com.aicode.agent.llm.ContentBlock;
+import com.aicode.agent.llm.ImageBlock;
+import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.tools.CodebaseSearch;
 import com.aicode.agent.tools.ListDirTool;
 import com.aicode.app.config.WorkingDirectory;
+import com.aicode.app.session.UserMessagePayload;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Chat context attachments (@ file / @ folder / @ selection / @ codebase). */
+/** Chat context attachments (@ file / @ folder / @ selection / @ codebase / @ image). */
 public final class ChatContextAttachments {
     public sealed interface Attachment {
         record File(Path path, String content) implements Attachment {}
+        record Image(Path path, byte[] data, String mediaType) implements Attachment {}
         record Folder(Path path, String summary) implements Attachment {}
         record Selection(Path path, String text) implements Attachment {}
         record Codebase() implements Attachment {}
@@ -32,6 +37,22 @@ public final class ChatContextAttachments {
     public void addFile(Path path, String content) {
         items.removeIf(a -> a instanceof Attachment.File f && f.path().equals(path));
         items.add(new Attachment.File(path, content));
+    }
+
+    public void addImage(Path path, byte[] data, String mediaType) {
+        items.removeIf(a -> a instanceof Attachment.Image img && img.path().equals(path));
+        items.add(new Attachment.Image(path, data, mediaType));
+    }
+
+    public boolean removeImage(Path path) {
+        return items.removeIf(a -> a instanceof Attachment.Image img && img.path().equals(path));
+    }
+
+    public List<Attachment.Image> images() {
+        return items.stream()
+                .filter(Attachment.Image.class::isInstance)
+                .map(Attachment.Image.class::cast)
+                .toList();
     }
 
     public void addFolder(Path path, String summary) {
@@ -56,12 +77,48 @@ public final class ChatContextAttachments {
         return items.stream().anyMatch(a -> a instanceof Attachment.Codebase);
     }
 
+    public boolean hasImages() {
+        return items.stream().anyMatch(a -> a instanceof Attachment.Image);
+    }
+
     public boolean isEmpty() {
         return items.isEmpty();
     }
 
-    /** Build user message payload including @ context and optional @Codebase search. */
+    /** Build user message including @ context (text and optional images for vision models). */
+    public UserMessagePayload buildUserMessage(String userText, Path workspace) {
+        String textBody = buildTextBody(userText, workspace);
+        if (!hasImages()) {
+            return UserMessagePayload.text(textBody, userText != null ? userText : "");
+        }
+        List<ContentBlock> blocks = new ArrayList<>();
+        if (textBody != null && !textBody.isBlank()) {
+            blocks.add(new TextBlock(textBody));
+        }
+        for (Attachment item : items) {
+            if (item instanceof Attachment.Image img) {
+                blocks.add(ImageBlock.of(img.path(), img.data()));
+            }
+        }
+        if (blocks.isEmpty()) {
+            blocks.add(new TextBlock(""));
+        }
+        return UserMessagePayload.blocks(blocks, userText != null ? userText : "");
+    }
+
+    /** @deprecated use {@link #buildUserMessage(String, Path)} */
+    @Deprecated
     public String buildFullPrompt(String userText, Path workspace) {
+        return buildUserMessage(userText, workspace).message().isStringContent()
+                ? buildUserMessage(userText, workspace).message().contentText()
+                : textBodyOnly(userText, workspace);
+    }
+
+    private String textBodyOnly(String userText, Path workspace) {
+        return buildTextBody(userText, workspace);
+    }
+
+    private String buildTextBody(String userText, Path workspace) {
         StringBuilder sb = new StringBuilder();
         if (hasCodebase() && userText != null && !userText.isBlank()) {
             CodebaseSearch.Result result = CodebaseSearch.search(workspace, userText, 8, null, null);
@@ -95,6 +152,10 @@ public final class ChatContextAttachments {
                                 truncate(file.content(), 12_000)
                         ))
                         .append("\n\n");
+                case Attachment.Image img -> sb.append("[@图片: ")
+                        .append(img.path())
+                        .append("]\n")
+                        .append("(已作为图像附件发送给模型)\n\n");
                 case Attachment.Folder folder -> sb.append("[@文件夹: ")
                         .append(folder.path())
                         .append("]\n")
@@ -111,7 +172,7 @@ public final class ChatContextAttachments {
                                 sel.text()
                         ))
                         .append("\n\n");
-                case Attachment.Codebase ignored -> { /* resolved in buildFullPrompt */ }
+                case Attachment.Codebase ignored -> { /* resolved in buildTextBody */ }
             }
         }
         return sb.toString();
@@ -126,6 +187,8 @@ public final class ChatContextAttachments {
             switch (item) {
                 case Attachment.File file ->
                         parts.add("@" + WorkingDirectory.displayName(file.path()));
+                case Attachment.Image img ->
+                        parts.add("@图片(" + WorkingDirectory.displayName(img.path()) + ")");
                 case Attachment.Folder folder ->
                         parts.add("@文件夹(" + WorkingDirectory.displayName(folder.path()) + ")");
                 case Attachment.Selection sel ->

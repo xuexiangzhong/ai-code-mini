@@ -129,7 +129,10 @@ public final class ModelRegistry {
                 contextWindow,
                 maxOutput,
                 maxCap,
-                legacy.maxOutputRetries() > 0 ? legacy.maxOutputRetries() : null
+                legacy.maxOutputRetries() > 0 ? legacy.maxOutputRetries() : null,
+                null,
+                null,
+                null
         ));
         defaultModelId = id;
         try {

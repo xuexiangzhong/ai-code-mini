@@ -259,6 +259,20 @@ public final class AgentSessionService {
             AgentEventListener listener,
             TurnContext turnContext
     ) {
+        return sendAgentMessage(
+                sessionId,
+                UserMessagePayload.text(userMessage, displayText),
+                listener,
+                turnContext
+        );
+    }
+
+    public CompletableFuture<Agent.AgentResult> sendAgentMessage(
+            String sessionId,
+            UserMessagePayload payload,
+            AgentEventListener listener,
+            TurnContext turnContext
+    ) {
         AgentSession session = getSession(sessionId);
         TurnContext ctx = turnContext != null
                 ? turnContext
@@ -266,7 +280,7 @@ public final class AgentSessionService {
         session.setPendingTurnContext(ctx);
         MessageHistory history = session.agentHistory();
         int turnsBefore = session.agentTurns().size();
-        history.addUser(userMessage, displayText);
+        history.addUserPayload(payload);
         persistQuietly(sessionId);
 
         ApprovalGate gate = new ApprovalGate(
@@ -336,6 +350,20 @@ public final class AgentSessionService {
             AgentEventListener listener,
             TurnContext turnContext
     ) {
+        return sendChatMessage(
+                sessionId,
+                UserMessagePayload.text(userMessage, displayText),
+                listener,
+                turnContext
+        );
+    }
+
+    public CompletableFuture<String> sendChatMessage(
+            String sessionId,
+            UserMessagePayload payload,
+            AgentEventListener listener,
+            TurnContext turnContext
+    ) {
         AgentSession session = getSession(sessionId);
         TurnContext ctx = turnContext != null
                 ? turnContext
@@ -343,7 +371,7 @@ public final class AgentSessionService {
         session.setPendingTurnContext(ctx);
         MessageHistory history = session.chatHistory();
         int turnsBefore = session.chatTurns().size();
-        history.addUser(userMessage, displayText);
+        history.addUserPayload(payload);
         persistQuietly(sessionId);
 
         AgentEventListener events = listener != null ? listener : AgentEventListener.NOOP;
@@ -593,6 +621,8 @@ public final class AgentSessionService {
             Message message = SessionMessageCodec.fromStored(stored);
             if ("user".equals(stored.role()) && message.isStringContent()) {
                 history.addUser(message.contentText(), SessionMessageCodec.displayContent(stored));
+            } else if ("user".equals(stored.role()) && stored.blocks() != null && !stored.blocks().isEmpty()) {
+                history.addUserPayload(new UserMessagePayload(message, SessionMessageCodec.displayContent(stored)));
             } else {
                 history.addMessage(message);
             }
@@ -605,6 +635,8 @@ public final class AgentSessionService {
             Message message = messages.get(i);
             if ("user".equals(message.role()) && message.isStringContent()) {
                 target.addUser(message.contentText(), source.userDisplayText(i));
+            } else if ("user".equals(message.role()) && !message.isStringContent()) {
+                target.addUserPayload(new UserMessagePayload(message, source.userDisplayText(i)));
             } else {
                 target.addMessage(message);
             }

@@ -1,6 +1,7 @@
 package com.aicode.app.ui.pane;
 
 import java.nio.file.Path;
+import java.util.Locale;
 
 /** Maps file extensions to Monaco language ids. */
 public final class EditorLanguage {
@@ -10,12 +11,24 @@ public final class EditorLanguage {
         if (path == null) {
             return "plaintext";
         }
-        String name = path.getFileName().toString().toLowerCase();
+        String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
         int dot = name.lastIndexOf('.');
         if (dot < 0) {
             return guessByName(name);
         }
-        return switch (name.substring(dot + 1)) {
+        String language = languageForExtension(name.substring(dot + 1));
+        return language != null ? language : "plaintext";
+    }
+
+    public static boolean isKnownTextExtension(String extension) {
+        if (extension == null || extension.isEmpty()) {
+            return false;
+        }
+        return languageForExtension(extension.toLowerCase(Locale.ROOT)) != null;
+    }
+
+    private static String languageForExtension(String extension) {
+        return switch (extension) {
             case "java" -> "java";
             case "js", "mjs", "cjs" -> "javascript";
             case "ts" -> "typescript";
@@ -44,7 +57,8 @@ public final class EditorLanguage {
             case "rb" -> "ruby";
             case "swift" -> "swift";
             case "vue" -> "html";
-            default -> "plaintext";
+            case "txt" -> "plaintext";
+            default -> null;
         };
     }
 

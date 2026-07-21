@@ -22,7 +22,8 @@ public record AppConfig(
         int maxOutputTokens,
         int maxOutputTokenCap,
         int maxOutputRetries,
-        boolean parallelToolCalls
+        boolean parallelToolCalls,
+        String embeddingModel
 ) {
     private static final String DEFAULT_BASE_URL = "https://api.deepseek.com/v1/chat/completions";
     private static final String DEFAULT_MODEL = "deepseek-chat";
@@ -32,6 +33,7 @@ public record AppConfig(
     private static final int DEFAULT_PORT = 8765;
     private static final int DEFAULT_MAX_ITERATIONS = 20;
     private static final int DEFAULT_CONTEXT_WINDOW = 32768;
+    private static final String DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
     public static int defaultContextWindow() {
         return DEFAULT_CONTEXT_WINDOW;
@@ -55,7 +57,8 @@ public record AppConfig(
                 DEFAULT_MAX_OUTPUT_TOKENS,
                 DEFAULT_MAX_OUTPUT_TOKEN_CAP,
                 DEFAULT_MAX_OUTPUT_RETRIES,
-                true
+                true,
+                ""
         );
     }
 
@@ -103,7 +106,8 @@ public record AppConfig(
                 maxOutputTokens,
                 maxOutputTokenCap,
                 maxOutputRetries,
-                parallelToolCalls
+                parallelToolCalls,
+                embeddingModel
         );
     }
 
@@ -116,8 +120,25 @@ public record AppConfig(
         return new AppConfig(
                 apiKey, baseUrl, model, providerType, agentName, agentIcon, workspace,
                 port, maxIterations, contextWindow, maxOutputTokens, maxOutputTokenCap, maxOutputRetries,
-                parallelToolCalls
+                parallelToolCalls, embeddingModel
         );
+    }
+
+    public AppConfig withAgentSettings(int maxIterations, boolean parallelToolCalls, String embeddingModel) {
+        return new AppConfig(
+                apiKey, baseUrl, model, providerType, agentName, agentIcon, workspace,
+                port, maxIterations, contextWindow, maxOutputTokens, maxOutputTokenCap, maxOutputRetries,
+                parallelToolCalls,
+                embeddingModel != null ? embeddingModel : ""
+        );
+    }
+
+    public String effectiveEmbeddingModel() {
+        if (embeddingModel != null && !embeddingModel.isBlank()) {
+            return embeddingModel;
+        }
+        String fromEnv = System.getenv("EMBEDDING_MODEL");
+        return fromEnv != null && !fromEnv.isBlank() ? fromEnv : DEFAULT_EMBEDDING_MODEL;
     }
 
     public OutputTokenLimits outputTokenLimits() {

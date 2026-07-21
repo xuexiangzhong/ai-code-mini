@@ -52,6 +52,10 @@ public final class CodebaseIndexManager {
         CACHE.remove(workspaceKey(workspace.toString()));
     }
 
+    public static Path indexDirFor(Path workspace) {
+        return Path.of(System.getProperty("user.home"), ".aicode", "index", workspaceKey(workspace.toString()));
+    }
+
     private static String workspaceKey(String workspace) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

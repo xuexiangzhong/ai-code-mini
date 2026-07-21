@@ -11,7 +11,7 @@ class TokenLimitsResolverTest {
     void profileCustomContextWindowWins() {
         ModelProfile profile = new ModelProfile(
                 "1", "Test", "https://api.example.com", "key", "qwen3.7-max", "openai-compatible",
-                65536, null, null, null
+                65536, null, null, null, null, null, null
         );
         AppConfig base = AppConfig.withDefaults().withValues(
                 "key", "https://api.example.com", "qwen3.7-max", "openai-compatible",

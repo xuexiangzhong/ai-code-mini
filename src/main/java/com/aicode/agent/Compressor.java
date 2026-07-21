@@ -7,6 +7,7 @@ import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.ToolResultBlock;
 import com.aicode.agent.llm.ToolUseBlock;
+import com.aicode.agent.llm.ImageBlock;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,8 @@ public final class Compressor {
                         .append(content, 0, preview)
                         .append(content.length() > preview ? "…]" : "]")
                         .append("\n");
+            } else if (block instanceof ImageBlock ib) {
+                sb.append("[Image: ").append(ib.sourcePath()).append("]\n");
             }
         }
         return sb.toString().stripTrailing();

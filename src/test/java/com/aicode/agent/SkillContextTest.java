@@ -24,7 +24,11 @@ class SkillContextTest {
                 Always write conventional commits.
                 """);
 
-        var skills = SkillContext.discover(workspace);
+        var skills = SkillContext.discover(
+                workspace,
+                workspace.resolve(".no-user-skills"),
+                workspace.resolve(".no-aicode-skills")
+        );
         assertEquals(1, skills.size());
         assertEquals("commit", skills.getFirst().name());
         assertEquals("Generate conventional commits from git diffs.", skills.getFirst().description());
@@ -78,7 +82,11 @@ class SkillContextTest {
                 Use 4 spaces for indentation.
                 """);
 
-        var skills = SkillContext.discover(workspace);
+        var skills = SkillContext.discover(
+                workspace,
+                workspace.resolve(".no-user-skills"),
+                workspace.resolve(".no-aicode-skills")
+        );
         assertNull(SkillContext.formatCatalog(skills));
         String alwaysApply = SkillContext.formatAlwaysApply(skills);
         assertNotNull(alwaysApply);
@@ -98,7 +106,11 @@ class SkillContextTest {
                 Steps here
                 """);
 
-        String catalog = SkillContext.formatCatalog(SkillContext.discover(workspace));
+        String catalog = SkillContext.formatCatalog(SkillContext.discover(
+                workspace,
+                workspace.resolve(".no-user-skills"),
+                workspace.resolve(".no-aicode-skills")
+        ));
         assertNotNull(catalog);
         assertTrue(catalog.contains("(explicit only)"));
     }

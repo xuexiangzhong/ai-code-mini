@@ -27,7 +27,11 @@ public final class ConversationTranscript {
     }
 
     public void startTurn(String userText, String createdAt) {
-        openTurn = new ChatTurn(userText, createdAt);
+        startTurn(userText, createdAt, List.of());
+    }
+
+    public void startTurn(String userText, String createdAt, List<String> userImagePaths) {
+        openTurn = new ChatTurn(userText, createdAt, userImagePaths);
         turns.add(openTurn);
     }
 
@@ -64,7 +68,17 @@ public final class ConversationTranscript {
     }
 
     public void prependTurn(String userText, List<String> activities, String assistantText, String createdAt) {
-        ChatTurn turn = new ChatTurn(userText, createdAt);
+        prependTurn(userText, activities, assistantText, createdAt, List.of());
+    }
+
+    public void prependTurn(
+            String userText,
+            List<String> activities,
+            String assistantText,
+            String createdAt,
+            List<String> userImagePaths
+    ) {
+        ChatTurn turn = new ChatTurn(userText, createdAt, userImagePaths);
         if (activities != null) {
             for (String activity : activities) {
                 turn.addActivity(activity);

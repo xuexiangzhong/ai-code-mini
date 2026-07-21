@@ -384,9 +384,9 @@
     -fx-background-color: #252526;
     -fx-border-color: #2b2b2b;
     -fx-border-width: 0 0 1 0;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-    -fx-max-height: 32;
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+    -fx-max-height: 36;
 }
 
 .editor-tabs .tab-header-area {
@@ -452,6 +452,19 @@
     -fx-opacity: 1;
 }
 
+.editor-encoding-box {
+    -fx-background-color: #1e1e1e;
+    -fx-border-color: #3e3e3e;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-font-size: 10px;
+    -fx-text-fill: #cccccc;
+}
+
+.editor-encoding-box .list-cell {
+    -fx-font-size: 11px;
+}
+
 .terminal-pane {
     -fx-background-color: #181818;
     -fx-border-color: #2b2b2b;
@@ -504,6 +517,66 @@
 .at-mention-textarea {
     -fx-font-size: 13px;
     -fx-padding: 4 0;
+}
+
+.composer-attachment-bar {
+    -fx-padding: 0 0 6 0;
+}
+
+.composer-attachment-chip {
+    -fx-background-color: #2a2a2a;
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(120, 120, 120, 0.45);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-padding: 2;
+    -fx-min-width: 60;
+    -fx-min-height: 60;
+}
+
+.composer-attachment-remove {
+    -fx-background-color: rgba(0, 0, 0, 0.55);
+    -fx-text-fill: #f0f0f0;
+    -fx-font-size: 11px;
+    -fx-padding: 0 4 1 4;
+    -fx-background-radius: 8;
+    -fx-cursor: hand;
+}
+
+.composer-attachment-remove:hover {
+    -fx-background-color: rgba(180, 40, 40, 0.85);
+}
+
+.composer-toolbar {
+    -fx-padding: 4 0 0 0;
+    -fx-alignment: center-left;
+}
+
+.composer-attach-image-btn {
+    -fx-background-color: transparent;
+    -fx-text-fill: #a0a0a0;
+    -fx-font-size: 14px;
+    -fx-padding: 2 6;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-cursor: hand;
+}
+
+.composer-attach-image-btn:hover {
+    -fx-background-color: #2a2a2a;
+    -fx-text-fill: #e4e4e4;
+}
+
+.chat-user-images {
+    -fx-padding: 0;
+}
+
+.chat-user-image-thumb {
+    -fx-background-color: #2a2a2a;
+    -fx-background-radius: 8;
+    -fx-border-color: rgba(120, 120, 120, 0.35);
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
 }
 
 .chat-row-file-edit {

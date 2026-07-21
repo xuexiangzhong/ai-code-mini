@@ -46,6 +46,13 @@ public final class Safety {
                 }
             }
 
+            return checkBoundary(filePath);
+        }
+
+        /** Only verifies the path stays inside allowed directories (no sensitive-pattern block). */
+        public String checkBoundary(String filePath) {
+            Path resolved = Path.of(filePath).toAbsolutePath().normalize();
+
             boolean inAllowed = allowedPaths.stream().anyMatch(allowed -> {
                 if (resolved.equals(allowed)) {
                     return true;

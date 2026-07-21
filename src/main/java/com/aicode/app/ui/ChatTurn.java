@@ -9,6 +9,7 @@ import java.util.List;
 public final class ChatTurn {
     private final String userText;
     private final String createdAt;
+    private final List<String> userImagePaths;
     private final List<String> activities = new ArrayList<>();
     private final StringBuilder assistant = new StringBuilder();
 
@@ -17,12 +18,21 @@ public final class ChatTurn {
     }
 
     public ChatTurn(String userText, String createdAt) {
+        this(userText, createdAt, List.of());
+    }
+
+    public ChatTurn(String userText, String createdAt, List<String> userImagePaths) {
         this.userText = userText;
         this.createdAt = createdAt;
+        this.userImagePaths = userImagePaths != null ? List.copyOf(userImagePaths) : List.of();
     }
 
     public String userText() {
         return userText;
+    }
+
+    public List<String> userImagePaths() {
+        return userImagePaths;
     }
 
     public String createdAt() {

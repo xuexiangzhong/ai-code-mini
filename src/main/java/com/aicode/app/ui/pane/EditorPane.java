@@ -69,7 +69,8 @@ public final class EditorPane extends StackPane {
      */
     private void handleScrollNormalize(ScrollEvent event) {
         event.consume();
-        int lines = scrollLinesFromDelta(event.getDeltaY());
+        // Match WebView.processScrollEvent: JavaFX deltaY sign is inverted vs browser/Monaco.
+        int lines = scrollLinesFromDelta(-event.getDeltaY());
         if (lines == 0) {
             return;
         }
@@ -165,6 +166,10 @@ public final class EditorPane extends StackPane {
     }
 
     private void handleCopy() {
+        if (!shouldHandleEditorClipboard()) {
+            copyOverlayInputSelection();
+            return;
+        }
         getSelectionAsync().thenAccept(text -> Platform.runLater(() -> {
             if (text == null || text.isEmpty()) {
                 return;
@@ -176,6 +181,10 @@ public final class EditorPane extends StackPane {
     }
 
     private void handleCut() {
+        if (!shouldHandleEditorClipboard()) {
+            cutOverlayInputSelection();
+            return;
+        }
         getSelectionAsync().thenAccept(text -> Platform.runLater(() -> {
             if (text == null || text.isEmpty()) {
                 return;
@@ -192,11 +201,72 @@ public final class EditorPane extends StackPane {
         if (!(clip instanceof String text) || text.isEmpty()) {
             return;
         }
-        whenReady(() -> engine.executeScript("insertText(" + jsString(text) + ");"));
+        boolean editorClipboard = shouldHandleEditorClipboard();
+        whenReady(() -> {
+            if (editorClipboard) {
+                engine.executeScript("insertText(" + jsString(text) + ");");
+            } else {
+                engine.executeScript("insertIntoFocusedInput(" + jsString(text) + ");");
+            }
+        });
     }
 
     private void handleSelectAll() {
-        whenReady(() -> engine.executeScript("selectAllText();"));
+        boolean editorClipboard = shouldHandleEditorClipboard();
+        whenReady(() -> {
+            if (editorClipboard) {
+                engine.executeScript("selectAllText();");
+            } else {
+                engine.executeScript("selectAllFocusedInput();");
+            }
+        });
+    }
+
+    private boolean shouldHandleEditorClipboard() {
+        if (!ready) {
+            return true;
+        }
+        try {
+            Object result = engine.executeScript(
+                    "typeof shouldHandleEditorClipboard === 'function' && shouldHandleEditorClipboard()");
+            return !Boolean.FALSE.equals(result);
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private void copyOverlayInputSelection() {
+        whenReady(() -> {
+            try {
+                Object result = engine.executeScript("getOverlayInputSelection()");
+                String text = result != null ? result.toString() : "";
+                if (text.isEmpty()) {
+                    return;
+                }
+                ClipboardContent content = new ClipboardContent();
+                content.putString(text);
+                Clipboard.getSystemClipboard().setContent(content);
+            } catch (Exception ignored) {
+                // editor not ready yet
+            }
+        });
+    }
+
+    private void cutOverlayInputSelection() {
+        whenReady(() -> {
+            try {
+                Object result = engine.executeScript("getOverlayInputSelection()");
+                String text = result != null ? result.toString() : "";
+                if (!text.isEmpty()) {
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(text);
+                    Clipboard.getSystemClipboard().setContent(content);
+                }
+                engine.executeScript("deleteOverlayInputSelection();");
+            } catch (Exception ignored) {
+                // editor not ready yet
+            }
+        });
     }
 
     private void requestEditorFocus() {
@@ -261,11 +331,17 @@ public final class EditorPane extends StackPane {
     }
 
     public void openFile(String content, String language) {
+        openFile(content, language, false);
+    }
+
+    public void openFile(String content, String language, boolean readOnly) {
         whenReady(() -> {
             engine.executeScript(
-                    "setContent(" + jsString(content) + "," + jsString(language) + ");"
+                    "setContent(" + jsString(content) + "," + jsString(language) + "," + readOnly + ");"
             );
-            engine.executeScript("focusEditor();");
+            if (!readOnly) {
+                engine.executeScript("focusEditor();");
+            }
             jsDirtyReported = false;
         });
     }

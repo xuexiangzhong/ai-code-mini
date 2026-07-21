@@ -41,6 +41,20 @@ public final class WorkspaceGuard {
         return null;
     }
 
+    /**
+     * Editor open/save: only enforce workspace boundary, not agent sensitive-file patterns.
+     *
+     * @return null if allowed, otherwise a block message
+     */
+    public String validateForEditor(String pathInput) {
+        Path resolved = resolve(pathInput);
+        String blocked = sandbox.checkBoundary(resolved.toString());
+        if (blocked != null) {
+            return blocked + " Workspace: " + workspace;
+        }
+        return null;
+    }
+
     public boolean isDirectory(Path path) {
         return Files.isDirectory(path);
     }

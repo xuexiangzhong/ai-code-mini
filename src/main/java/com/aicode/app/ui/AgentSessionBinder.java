@@ -9,6 +9,7 @@ import com.aicode.app.event.AgentEvent;
 import com.aicode.app.session.AgentSession;
 import com.aicode.app.session.AgentSessionService;
 import com.aicode.app.session.ChatMode;
+import com.aicode.app.session.UserMessagePayload;
 import com.aicode.app.session.ConversationTranscriptLoader;
 import com.aicode.app.session.SessionPersistence;
 import com.aicode.app.ui.dialog.ApprovalDialog;
@@ -405,16 +406,16 @@ public final class AgentSessionBinder {
             return;
         }
         String text = chatInput.getText().strip();
-        if (text.isEmpty()) {
+        if (text.isEmpty() && !chatInput.attachments().hasImages()) {
             return;
         }
-        String payload = chatInput.attachments().buildFullPrompt(text, workspaceRoot);
+        UserMessagePayload userPayload = chatInput.attachments().buildUserMessage(text, workspaceRoot);
         TurnContext turnContext = TurnContext.of(workspaceRoot, chatInput.activeFile());
         ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
         ConversationContext sending = active;
         chatInput.clearAfterSend();
         maybeUpdateTitle(sending, text);
-        appendUser(sending, text);
+        appendUser(sending, userPayload);
         sending.setTranscriptPagination(
                 sending.oldestLoadedTurnIndex(),
                 sending.totalTurns() + 1
@@ -425,10 +426,10 @@ public final class AgentSessionBinder {
         statusLabel.setText("生成中...");
 
         if (mode == ChatMode.CHAT) {
-            sessionService.sendChatMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
+            sessionService.sendChatMessage(sending.sessionId(), userPayload, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         } else {
-            sessionService.sendAgentMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
+            sessionService.sendAgentMessage(sending.sessionId(), userPayload, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         }
     }
@@ -517,11 +518,13 @@ public final class AgentSessionBinder {
         context.setTranscriptPagination(page.startIndex(), page.totalTurns());
     }
 
-    private void appendUser(ConversationContext context, String text) {
+    private void appendUser(ConversationContext context, UserMessagePayload payload) {
+        String text = payload.displayText() != null ? payload.displayText() : "";
+        List<String> imagePaths = payload.imagePaths();
         String createdAt = java.time.Instant.now().toString();
-        context.transcript().startTurn(text, createdAt);
+        context.transcript().startTurn(text, createdAt, imagePaths);
         if (context == active) {
-            Platform.runLater(() -> chatView.startTurn(text, createdAt));
+            Platform.runLater(() -> chatView.startTurn(text, createdAt, imagePaths));
         }
     }
 

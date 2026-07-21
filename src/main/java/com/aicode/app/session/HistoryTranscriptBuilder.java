@@ -2,8 +2,10 @@ package com.aicode.app.session;
 
 import com.aicode.agent.MessageHistory;
 import com.aicode.agent.llm.ContentBlock;
+import com.aicode.agent.llm.ImageBlock;
 import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.TextBlock;
+import com.aicode.agent.llm.ToolResultBlock;
 import com.aicode.agent.llm.ToolUseBlock;
 
 import java.util.ArrayList;
@@ -35,11 +37,20 @@ public final class HistoryTranscriptBuilder {
                     if (current != null) {
                         turns.add(current.build());
                     }
-                    current = new TurnAccumulator(history.userDisplayText(i));
+                    current = new TurnAccumulator(history.userDisplayText(i), List.of());
                     continue;
                 }
                 if (current != null && hasToolResults(message)) {
                     continue;
+                }
+                if (isUserContentMessage(message)) {
+                    if (current != null) {
+                        turns.add(current.build());
+                    }
+                    current = new TurnAccumulator(
+                            history.userDisplayText(i),
+                            extractImagePaths(message)
+                    );
                 }
             } else if ("assistant".equals(message.role()) && current != null) {
                 appendAssistant(message, current);
@@ -80,11 +91,36 @@ public final class HistoryTranscriptBuilder {
             return false;
         }
         for (ContentBlock block : message.contentBlocks()) {
+            if (block instanceof ToolResultBlock) {
+                return true;
+            }
             if (block instanceof ToolUseBlock) {
                 return false;
             }
         }
+        return false;
+    }
+
+    private static boolean isUserContentMessage(Message message) {
+        if (message.isStringContent() || !"user".equals(message.role())) {
+            return false;
+        }
+        for (ContentBlock block : message.contentBlocks()) {
+            if (block instanceof ToolResultBlock) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    private static List<String> extractImagePaths(Message message) {
+        List<String> paths = new ArrayList<>();
+        for (ContentBlock block : message.contentBlocks()) {
+            if (block instanceof ImageBlock ib) {
+                paths.add(ib.sourcePath());
+            }
+        }
+        return paths;
     }
 
     private static void appendAssistant(Message message, TurnAccumulator current) {
@@ -118,11 +154,13 @@ public final class HistoryTranscriptBuilder {
 
     private static final class TurnAccumulator {
         private final String userText;
+        private final List<String> userImagePaths;
         private final List<String> activities = new ArrayList<>();
         private final StringBuilder assistantText = new StringBuilder();
 
-        TurnAccumulator(String userText) {
+        TurnAccumulator(String userText, List<String> userImagePaths) {
             this.userText = userText;
+            this.userImagePaths = userImagePaths != null ? List.copyOf(userImagePaths) : List.of();
         }
 
         void addActivity(String activity) {
@@ -140,7 +178,13 @@ public final class HistoryTranscriptBuilder {
         }
 
         ChatTurnDto build() {
-            return new ChatTurnDto(userText, List.copyOf(activities), assistantText.toString());
+            return ChatTurnDto.userTurn(
+                    userText,
+                    List.copyOf(activities),
+                    assistantText.toString(),
+                    null,
+                    userImagePaths
+            );
         }
     }
 }

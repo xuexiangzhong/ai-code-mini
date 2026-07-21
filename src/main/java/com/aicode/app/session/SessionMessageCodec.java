@@ -1,6 +1,7 @@
 package com.aicode.app.session;
 
 import com.aicode.agent.llm.ContentBlock;
+import com.aicode.agent.llm.ImageBlock;
 import com.aicode.agent.llm.Message;
 import com.aicode.agent.llm.TextBlock;
 import com.aicode.agent.llm.ToolResultBlock;
@@ -27,7 +28,7 @@ public final class SessionMessageCodec {
         for (ContentBlock block : message.contentBlocks()) {
             blocks.add(toBlock(block));
         }
-        return new SessionPersistence.StoredMessage(message.role(), null, null, blocks);
+        return new SessionPersistence.StoredMessage(message.role(), null, displayContent, blocks);
     }
 
     public static Message fromStored(SessionPersistence.StoredMessage stored) {
@@ -58,6 +59,11 @@ public final class SessionMessageCodec {
                     "text", tb.text(), null, null, null, null, null, null
             );
         }
+        if (block instanceof ImageBlock ib) {
+            return new SessionPersistence.StoredMessage.PersistedBlockRef(
+                    "image", ib.sourcePath(), null, ib.mediaType(), null, null, null, null
+            );
+        }
         if (block instanceof ToolUseBlock tub) {
             return new SessionPersistence.StoredMessage.PersistedBlockRef(
                     "tool_use", null, tub.id(), tub.name(), tub.input(), null, null, null
@@ -74,6 +80,10 @@ public final class SessionMessageCodec {
     private static ContentBlock fromBlock(SessionPersistence.StoredMessage.PersistedBlockRef block) {
         return switch (block.type()) {
             case "text" -> new TextBlock(block.text() != null ? block.text() : "");
+            case "image" -> ImageBlock.fromPersistedPath(
+                    block.text() != null ? block.text() : "",
+                    block.name()
+            );
             case "tool_use" -> new ToolUseBlock(
                     block.id() != null ? block.id() : "",
                     block.name() != null ? block.name() : "",

@@ -4,6 +4,8 @@ import com.aicode.app.application.WorkspaceGuard;
 import com.aicode.app.config.ModelProfile;
 import com.aicode.app.config.ModelRegistry;
 import com.aicode.app.config.WorkingDirectory;
+import com.aicode.app.ui.pane.EditorFileContent;
+import com.aicode.app.ui.pane.EditorFileLoader;
 import com.aicode.app.ui.pane.EditorTabManager;
 import com.aicode.app.window.WindowManager;
 import javafx.application.Platform;
@@ -94,7 +96,7 @@ public final class AgentsWindowController {
         chatView.setOnFileEditChanged(this::reloadEditedFile);
 
         composerInput = new AtMentionInput();
-        composerInput.setPromptText("发送消息…（@ 引用文件，Enter 发送，Shift+Enter 换行）");
+        composerInput.setPromptText("发送消息…（@ 引用 · 粘贴/拖入图片 · Enter 发送，Shift+Enter 换行）");
         composerInput.bindWorkspace(initialWorkspace);
         HBox.setHgrow(composerInput.node(), Priority.ALWAYS);
         chatInputHost.getChildren().add(composerInput);
@@ -208,14 +210,14 @@ public final class AgentsWindowController {
 
     private void openFileInEditor(Path path) {
         try {
-            String content = Files.readString(path);
+            EditorFileContent content = EditorFileLoader.load(path);
             Platform.runLater(() -> openFileWhenReady(path, content, 0));
         } catch (IOException e) {
             sessionManager.appendSystemLine("无法打开文件: " + e.getMessage());
         }
     }
 
-    private void openFileWhenReady(Path path, String content, int attempt) {
+    private void openFileWhenReady(Path path, EditorFileContent content, int attempt) {
         if (editorTabs == null) {
             if (attempt < 20) {
                 Platform.runLater(() -> openFileWhenReady(path, content, attempt + 1));
@@ -313,7 +315,11 @@ public final class AgentsWindowController {
         }
         Thread.ofVirtual().name("agent-context-file-load").start(() -> {
             try {
-                String content = Files.readString(path);
+                EditorFileContent loaded = EditorFileLoader.load(path);
+                String content = switch (loaded.mode()) {
+                    case TEXT, HEX -> loaded.text();
+                    default -> "";
+                };
                 Platform.runLater(() -> callback.accept(content));
             } catch (IOException e) {
                 Platform.runLater(() -> callback.accept(""));
@@ -382,7 +388,7 @@ public final class AgentsWindowController {
                     Platform.runLater(() -> editorTabs.closeFile(path));
                     return;
                 }
-                String content = Files.readString(path);
+                EditorFileContent content = EditorFileLoader.load(path);
                 Platform.runLater(() -> editorTabs.reloadFile(path, content));
             } catch (IOException ignored) {
                 // ignore reload errors

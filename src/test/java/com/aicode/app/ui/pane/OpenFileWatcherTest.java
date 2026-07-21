@@ -18,7 +18,7 @@ class OpenFileWatcherTest {
         AtomicInteger changes = new AtomicInteger();
         OpenFileWatcher watcher = new OpenFileWatcher(new OpenFileWatcher.Listener() {
             @Override
-            public void onExternalChange(Path path, String diskContent) {
+            public void onExternalChange(Path path, EditorFileContent diskContent) {
                 changes.incrementAndGet();
             }
 
@@ -47,7 +47,7 @@ class OpenFileWatcherTest {
         Path file = dir.resolve("b.txt");
         OpenFileWatcher watcher = new OpenFileWatcher(new OpenFileWatcher.Listener() {
             @Override
-            public void onExternalChange(Path path, String diskContent) {
+            public void onExternalChange(Path path, EditorFileContent diskContent) {
             }
 
             @Override

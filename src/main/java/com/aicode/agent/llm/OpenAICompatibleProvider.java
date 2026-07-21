@@ -1,5 +1,7 @@
 package com.aicode.agent.llm;
 
+import com.aicode.agent.ToolMessageRepair;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -69,7 +71,8 @@ public class OpenAICompatibleProvider implements LLMProvider {
                 ObjectNode body = MAPPER.createObjectNode();
                 body.put("model", model);
                 body.put("max_tokens", opts.maxTokens() != null ? opts.maxTokens() : 4096);
-                body.set("messages", MAPPER.valueToTree(formatMessages(messages, opts.system())));
+                body.set("messages", MAPPER.valueToTree(
+                        formatMessages(ToolMessageRepair.repair(messages), opts.system())));
 
                 if (opts.tools() != null && !opts.tools().isEmpty()) {
                     ArrayNode tools = body.putArray("tools");
@@ -113,7 +116,8 @@ public class OpenAICompatibleProvider implements LLMProvider {
             body.put("model", model);
             body.put("stream", true);
             body.put("max_tokens", opts.maxTokens() != null ? opts.maxTokens() : 4096);
-            body.set("messages", MAPPER.valueToTree(formatMessages(messages, opts.system())));
+            body.set("messages", MAPPER.valueToTree(
+                    formatMessages(ToolMessageRepair.repair(messages), opts.system())));
 
             if (opts.tools() != null && !opts.tools().isEmpty()) {
                 ArrayNode tools = body.putArray("tools");
@@ -341,6 +345,10 @@ public class OpenAICompatibleProvider implements LLMProvider {
                 continue;
             }
             List<ContentBlock> blocks = m.contentBlocks();
+            if ("user".equals(m.role())) {
+                appendUserRoleMessages(formatted, blocks);
+                continue;
+            }
             if ("assistant".equals(m.role())) {
                 StringBuilder text = new StringBuilder();
                 List<ToolUseBlock> toolUses = new ArrayList<>();
@@ -373,18 +381,48 @@ public class OpenAICompatibleProvider implements LLMProvider {
                     msg.put("tool_calls", toolCalls);
                 }
                 formatted.add(msg);
-            } else {
-                for (ContentBlock block : blocks) {
-                    if (block instanceof ToolResultBlock trb) {
-                        formatted.add(Map.of(
-                                "role", "tool",
-                                "tool_call_id", trb.toolUseId(),
-                                "content", trb.content()
-                        ));
-                    }
-                }
             }
         }
         return formatted;
+    }
+
+    private void appendUserRoleMessages(List<Map<String, Object>> formatted, List<ContentBlock> blocks) {
+        List<ContentBlock> userContent = new ArrayList<>();
+        for (ContentBlock block : blocks) {
+            if (block instanceof ToolResultBlock trb) {
+                formatted.add(Map.of(
+                        "role", "tool",
+                        "tool_call_id", trb.toolUseId(),
+                        "content", trb.content()
+                ));
+            } else {
+                userContent.add(block);
+            }
+        }
+        if (!userContent.isEmpty()) {
+            formatted.add(formatUserBlocks("user", userContent));
+        }
+    }
+
+    private Map<String, Object> formatUserBlocks(String role, List<ContentBlock> blocks) {
+        List<Map<String, Object>> parts = new ArrayList<>();
+        for (ContentBlock block : blocks) {
+            if (block instanceof TextBlock tb) {
+                parts.add(Map.of("type", "text", "text", tb.text()));
+            } else if (block instanceof ImageBlock ib) {
+                if (ib.hasData()) {
+                    parts.add(Map.of(
+                            "type", "image_url",
+                            "image_url", Map.of(
+                                    "url", "data:" + ib.mediaType() + ";base64," + ib.base64Data()
+                            )
+                    ));
+                }
+            }
+        }
+        if (parts.size() == 1 && parts.getFirst().get("type").equals("text")) {
+            return Map.of("role", role, "content", ((Map<?, ?>) parts.getFirst()).get("text"));
+        }
+        return Map.of("role", role, "content", parts);
     }
 }

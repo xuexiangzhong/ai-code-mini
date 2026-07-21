@@ -8,6 +8,7 @@ import com.aicode.app.event.AgentEvent;
 import com.aicode.app.session.AgentSession;
 import com.aicode.app.session.AgentSessionService;
 import com.aicode.app.session.ChatMode;
+import com.aicode.app.session.UserMessagePayload;
 import com.aicode.app.ui.dialog.AgentsSetupPromptDialog;
 import com.aicode.app.ui.dialog.ApprovalDialog;
 import javafx.application.Platform;
@@ -474,19 +475,19 @@ public final class AgentWindowSessionManager {
             return;
         }
         String text = chatInput.getText().strip();
-        if (text.isEmpty()) {
+        if (text.isEmpty() && !chatInput.attachments().hasImages()) {
             return;
         }
         if (onMessageSent != null) {
             onMessageSent.run();
         }
-        String payload = chatInput.attachments().buildFullPrompt(text, activeWorkspace.path());
+        UserMessagePayload userPayload = chatInput.attachments().buildUserMessage(text, activeWorkspace.path());
         TurnContext turnContext = TurnContext.of(activeWorkspace.path(), chatInput.activeFile());
         ChatMode mode = chatModeBox.getValue() != null ? chatModeBox.getValue() : ChatMode.AGENT;
         ConversationContext sending = activeConversation;
         chatInput.clearAfterSend();
         maybeUpdateTitle(sending, text);
-        appendUser(sending, text);
+        appendUser(sending, userPayload);
         sending.setTranscriptPagination(
                 sending.oldestLoadedTurnIndex(),
                 sending.totalTurns() + 1
@@ -498,10 +499,10 @@ public final class AgentWindowSessionManager {
 
         AgentSessionService sessionService = activeWorkspace.sessionService();
         if (mode == ChatMode.CHAT) {
-            sessionService.sendChatMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
+            sessionService.sendChatMessage(sending.sessionId(), userPayload, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         } else {
-            sessionService.sendAgentMessage(sending.sessionId(), payload, text, sending.bridge(), turnContext)
+            sessionService.sendAgentMessage(sending.sessionId(), userPayload, sending.bridge(), turnContext)
                     .whenComplete((result, error) -> Platform.runLater(() -> finishSend(sending, error)));
         }
     }
@@ -576,11 +577,13 @@ public final class AgentWindowSessionManager {
         sendButton.setDisable(!ready);
     }
 
-    private void appendUser(ConversationContext conversation, String text) {
+    private void appendUser(ConversationContext conversation, UserMessagePayload payload) {
+        String text = payload.displayText() != null ? payload.displayText() : "";
+        List<String> imagePaths = payload.imagePaths();
         String createdAt = java.time.Instant.now().toString();
-        conversation.transcript().startTurn(text, createdAt);
+        conversation.transcript().startTurn(text, createdAt, imagePaths);
         if (conversation == activeConversation) {
-            Platform.runLater(() -> chatView.startTurn(text, createdAt));
+            Platform.runLater(() -> chatView.startTurn(text, createdAt, imagePaths));
         }
     }
 

@@ -12,12 +12,16 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.nio.file.Path;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,6 +33,7 @@ import java.util.function.Consumer;
 /** Scrollable chat area with styled user / assistant bubbles and a single activity strip per turn. */
 public final class ChatTranscriptView extends ScrollPane {
     private static final double LOAD_OLDER_THRESHOLD = 0.08;
+    private static final double USER_IMAGE_THUMB_SIZE = 96;
 
     private final VBox messageBox = new VBox(10);
     private TextArea streamingBody;
@@ -112,7 +117,12 @@ public final class ChatTranscriptView extends ScrollPane {
 
         for (int i = turns.size() - 1; i >= 0; i--) {
             TurnUi ui = new TurnUi(new ArrayList<>(turns.get(i).activities()));
-            VBox turnBox = buildTurnShell(ui, turns.get(i).userText(), turns.get(i).createdAt());
+            VBox turnBox = buildTurnShell(
+                    ui,
+                    turns.get(i).userText(),
+                    turns.get(i).userImagePaths(),
+                    turns.get(i).createdAt()
+            );
             if (!turns.get(i).assistantText().isEmpty()) {
                 ui.assistantBody = attachAssistantBlock(turnBox);
                 ui.assistantBody.setText(turns.get(i).assistantText());
@@ -225,8 +235,12 @@ public final class ChatTranscriptView extends ScrollPane {
     }
 
     public void startTurn(String userText, String createdAt) {
+        startTurn(userText, createdAt, List.of());
+    }
+
+    public void startTurn(String userText, String createdAt, List<String> userImagePaths) {
         currentTurn = new TurnUi(new ArrayList<>());
-        VBox turnBox = buildTurnShell(currentTurn, userText, createdAt);
+        VBox turnBox = buildTurnShell(currentTurn, userText, userImagePaths, createdAt);
         messageBox.getChildren().add(turnBox);
         scrollToBottom();
     }
@@ -292,7 +306,7 @@ public final class ChatTranscriptView extends ScrollPane {
 
     public void appendStandaloneNotice(String text, String createdAt) {
         TurnUi notice = new TurnUi(List.of(text.strip()));
-        messageBox.getChildren().add(buildTurnShell(notice, null, createdAt));
+        messageBox.getChildren().add(buildTurnShell(notice, null, List.of(), createdAt));
         refreshActivityRow(notice);
         scrollToBottom();
     }
@@ -304,7 +318,7 @@ public final class ChatTranscriptView extends ScrollPane {
 
     private void renderTurn(ChatTurn turn) {
         TurnUi ui = new TurnUi(new ArrayList<>(turn.activities()));
-        VBox turnBox = buildTurnShell(ui, turn.userText(), turn.createdAt());
+        VBox turnBox = buildTurnShell(ui, turn.userText(), turn.userImagePaths(), turn.createdAt());
         if (!turn.assistantText().isEmpty()) {
             ui.assistantBody = attachAssistantBlock(turnBox);
             ui.assistantBody.setText(turn.assistantText());
@@ -313,7 +327,7 @@ public final class ChatTranscriptView extends ScrollPane {
         messageBox.getChildren().add(turnBox);
     }
 
-    private VBox buildTurnShell(TurnUi ui, String userText, String createdAt) {
+    private VBox buildTurnShell(TurnUi ui, String userText, List<String> userImagePaths, String createdAt) {
         VBox turnBox = new VBox(8);
         turnBox.getStyleClass().add("chat-turn");
         turnBox.setFillWidth(true);
@@ -328,13 +342,18 @@ public final class ChatTranscriptView extends ScrollPane {
             turnBox.getChildren().add(timeRow);
         }
 
-        if (userText != null && !userText.isBlank()) {
-            turnBox.getChildren().add(createUserBubble(userText));
+        if (hasUserContent(userText, userImagePaths)) {
+            turnBox.getChildren().add(createUserBubble(userText, userImagePaths));
         }
 
         ui.activityRow = createActivityRow(ui);
         turnBox.getChildren().add(ui.activityRow);
         return turnBox;
+    }
+
+    private static boolean hasUserContent(String userText, List<String> userImagePaths) {
+        return (userText != null && !userText.isBlank())
+                || (userImagePaths != null && !userImagePaths.isEmpty());
     }
 
     private void refreshActivityRow(TurnUi ui) {
@@ -352,10 +371,30 @@ public final class ChatTranscriptView extends ScrollPane {
         ui.countLabel.setManaged(count > 1);
     }
 
-    private HBox createUserBubble(String text) {
-        TextArea body = createMessageBody(text);
+    private HBox createUserBubble(String text, List<String> userImagePaths) {
+        VBox bubbleContent = new VBox(6);
+        if (userImagePaths != null && !userImagePaths.isEmpty()) {
+            FlowPane images = new FlowPane(6, 6);
+            images.getStyleClass().add("chat-user-images");
+            for (String imagePath : userImagePaths) {
+                if (imagePath == null || imagePath.isBlank()) {
+                    continue;
+                }
+                Path path = Path.of(imagePath);
+                ImageView preview = ComposerImageStore.thumbnailView(path, USER_IMAGE_THUMB_SIZE);
+                preview.getStyleClass().add("chat-user-image-thumb");
+                Tooltip.install(preview, new Tooltip(ComposerImageStore.displayName(path)));
+                images.getChildren().add(preview);
+            }
+            if (!images.getChildren().isEmpty()) {
+                bubbleContent.getChildren().add(images);
+            }
+        }
+        if (text != null && !text.isBlank()) {
+            bubbleContent.getChildren().add(createMessageBody(text));
+        }
 
-        VBox bubble = new VBox(body);
+        VBox bubble = new VBox(bubbleContent);
         bubble.getStyleClass().add("chat-bubble-user");
         bubble.setMaxWidth(Region.USE_PREF_SIZE);
 

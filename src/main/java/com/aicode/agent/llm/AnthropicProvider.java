@@ -174,6 +174,17 @@ public class AnthropicProvider implements LLMProvider {
         for (ContentBlock block : message.contentBlocks()) {
             if (block instanceof TextBlock tb) {
                 result.add(Map.of("type", "text", "text", tb.text()));
+            } else if (block instanceof ImageBlock ib) {
+                if (ib.hasData()) {
+                    result.add(Map.of(
+                            "type", "image",
+                            "source", Map.of(
+                                    "type", "base64",
+                                    "media_type", ib.mediaType(),
+                                    "data", ib.base64Data()
+                            )
+                    ));
+                }
             } else if (block instanceof ToolUseBlock tub) {
                 Map<String, Object> m = new HashMap<>();
                 m.put("type", "tool_use");

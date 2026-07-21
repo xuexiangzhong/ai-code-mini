@@ -41,6 +41,15 @@ class WorkspaceGuardTest {
     void allowsPathsInsideWorkspace() {
         assertNull(guard.validate("pom.xml"));
     }
+
+    @Test
+    void editorAccessAllowsSensitiveFilesInsideWorkspace() throws Exception {
+        Path env = workspace.resolve(".env");
+        java.nio.file.Files.writeString(env, "KEY=value");
+
+        assertNotNull(guard.validate(".env"));
+        assertNull(guard.validateForEditor(".env"));
+    }
 }
 
 class DefaultToolExecutorSandboxTest {

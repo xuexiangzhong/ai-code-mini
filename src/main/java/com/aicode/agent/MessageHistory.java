@@ -22,6 +22,11 @@ public class MessageHistory {
         userDisplayTexts.add(displayContent != null ? displayContent : content);
     }
 
+    public void addUserPayload(com.aicode.app.session.UserMessagePayload payload) {
+        messages.add(payload.message());
+        userDisplayTexts.add(payload.displayText() != null ? payload.displayText() : "");
+    }
+
     public void addAssistant(String content) {
         messages.add(new Message("assistant", content));
         userDisplayTexts.add(null);
@@ -97,7 +102,7 @@ public class MessageHistory {
             return "";
         }
         String display = userDisplayTexts.get(index);
-        if (display != null) {
+        if (display != null && !display.isBlank()) {
             return display;
         }
         Message message = messages.get(index);

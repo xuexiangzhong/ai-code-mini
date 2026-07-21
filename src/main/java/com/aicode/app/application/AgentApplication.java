@@ -9,6 +9,7 @@ import com.aicode.agent.SkillContext;
 import com.aicode.agent.TaskManager;
 import com.aicode.agent.ToolOutputLimiter;
 import com.aicode.agent.index.CodebaseIndexManager;
+import com.aicode.agent.index.CodebaseIndexRefresher;
 import com.aicode.agent.llm.ChatOptions;
 import com.aicode.agent.llm.EmbeddingProvider;
 import com.aicode.agent.llm.LLMProvider;
@@ -72,25 +73,32 @@ public final class AgentApplication {
         this.systemPrompt = PromptFactory.buildAgentPrompt(config.workspace(), tools, promptBudget);
         this.chatSystemPrompt = PromptFactory.buildChatPrompt();
         warmCodebaseIndex();
+        CodebaseIndexRefresher.configure(() -> new CodebaseIndexRefresher.EmbeddingConfig(
+                config.apiKey(),
+                config.baseUrl(),
+                config.effectiveEmbeddingModel()
+        ));
     }
 
     public EmbeddingProvider embeddingProvider() {
         if (config.apiKey() == null || config.apiKey().isBlank()) {
             return null;
         }
-        String model = System.getenv().getOrDefault("EMBEDDING_MODEL", "text-embedding-3-small");
         return new OpenAICompatibleEmbeddingProvider(
-                new OpenAICompatibleEmbeddingProvider.Config(config.apiKey(), config.baseUrl(), model)
+                new OpenAICompatibleEmbeddingProvider.Config(
+                        config.apiKey(),
+                        config.baseUrl(),
+                        config.effectiveEmbeddingModel()
+                )
         );
     }
 
     public void warmCodebaseIndex() {
-        String model = System.getenv().getOrDefault("EMBEDDING_MODEL", "text-embedding-3-small");
         CodebaseIndexManager.warmIndex(
                 config.workspace(),
                 config.apiKey(),
                 config.baseUrl(),
-                model
+                config.effectiveEmbeddingModel()
         );
     }
 
